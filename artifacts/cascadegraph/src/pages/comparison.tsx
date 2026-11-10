@@ -35,7 +35,7 @@ export default function ComparisonPage() {
   const assumptions = Array.from(new Set([...s.baseline.assumptions, ...(s.candidate?.assumptions ?? [])]));
   return (
     <>
-      <PageHeader kicker={`04 / comparison · model ${s.model_version}`} title={sc.name}
+      <PageHeader kicker={`comparison · model ${s.model_version}`} title={sc.name}
         actions={<Button asChild size="sm" variant="outline"><Link href={`/simulation/${s.analysis_id}`} data-testid="link-new-scenario"><RotateCcw className="mr-1.5 h-4 w-4" />New scenario</Link></Button>}>
         <span className="num text-xs">{sc.mode} · seed {sc.seed} · {sc.requests} req @ {sc.arrival_rate}/s · entry {sc.entry_service ?? "auto"} · {fmtDate(s.created_at)}</span>
       </PageHeader>

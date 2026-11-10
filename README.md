@@ -27,6 +27,9 @@ They provide ports/routing. The Python API lives under `/api`; React under `/`.
 The unused Express and PostgreSQL scaffolds are not the runtime backend.
 
 Restore dependencies with `pnpm install --frozen-lockfile` and `uv sync --frozen`.
+For a fresh PostgreSQL development database, run
+`uv run --frozen python -m cascadegraph_runtime.setup_database` before starting
+the API. See [PostgreSQL setup and local data migration](docs/POSTGRESQL.md).
 Python 3.13 and Node 24 are used. Do not install uploaded project dependencies.
 
 ## Verify
@@ -55,8 +58,8 @@ in the Replit application. AI transmission is opt-in and redacted heuristically,
 not guaranteed secret-free. No arbitrary-host URL ingestion or private multi-user
 mode. Private repositories require an archive or source-file upload.
 
-SQLite is ephemeral demo storage with anonymous cookie ownership and 24-hour
-retention, not durable production storage. Export important reports. Model output
+PostgreSQL stores normalized snapshots with anonymous cookie ownership and 24-hour
+retention. An explicit SQLite path is supported only for local/tests. Export important reports. Model output
 is a prediction under explicit assumptions, never a production safety guarantee.
 See [security](SECURITY.md), [threat model](docs/THREAT_MODEL.md), and
 [limitations](docs/KNOWN_LIMITATIONS.md).

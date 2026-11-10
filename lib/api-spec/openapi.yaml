@@ -15,10 +15,32 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/HealthStatus" }
+  /v1/health/live:
+    get:
+      operationId: livenessCheck
+      description: No database access, rate admission, or owner-cookie creation.
+      responses:
+        "200":
+          description: Process is serving requests
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+  /v1/health/ready:
+    get:
+      operationId: readinessCheck
+      description: Bounded non-mutating database probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms.
+      responses:
+        "200":
+          description: Storage is readable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+        "503": { $ref: "#/components/responses/StorageFailure" }
   /v1/status:
     get:
       operationId: getSystemStatus
       responses:
+        "503": { $ref: "#/components/responses/StorageFailure" }
         "200":
           description: Capabilities, limits and honest validation status
           content:
@@ -28,6 +50,7 @@ paths:
     get:
       operationId: listAnalyses
       responses:
+        "503": { $ref: "#/components/responses/StorageFailure" }
         "200":
           description: Analyses owned by this anonymous session
           content:
@@ -48,6 +71,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Analysis" }
+        "503": { $ref: "#/components/responses/StorageFailure" }
   /v1/analyses/archive:
     post:
       operationId: uploadArchive
@@ -62,6 +86,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Analysis" }
+        "503": { $ref: "#/components/responses/StorageFailure" }
   /v1/analyses/repository:
     post:
       operationId: analyzeRepository
@@ -76,6 +101,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Analysis" }
+        "503": { $ref: "#/components/responses/StorageFailure" }
   /v1/analyses/sources:
     post:
       operationId: analyzeSources
@@ -90,12 +116,14 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Analysis" }
+        "503": { $ref: "#/components/responses/StorageFailure" }
   /v1/analyses/{analysisId}:
     parameters:
       - { name: analysisId, in: path, required: true, schema: { type: string } }
     get:
       operationId: getAnalysis
       responses:
+        "503": { $ref: "#/components/responses/StorageFailure" }
         "200":
           description: Analysis with graph, policies and findings
           content:
@@ -104,6 +132,7 @@ paths:
     delete:
       operationId: deleteAnalysis
       responses:
+        "503": { $ref: "#/components/responses/StorageFailure" }
         "204": { description: Analysis and associated simulations deleted }
   /v1/analyses/{analysisId}/policies/{policyId}:
     parameters:
@@ -122,6 +151,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Analysis" }
+        "503": { $ref: "#/components/responses/StorageFailure" }
   /v1/analyses/{analysisId}/edges/{edgeId}/confirm:
     parameters:
       - { name: analysisId, in: path, required: true, schema: { type: string } }
@@ -139,6 +169,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Analysis" }
+        "503": { $ref: "#/components/responses/StorageFailure" }
   /v1/analyses/{analysisId}/simulations:
     parameters:
       - { name: analysisId, in: path, required: true, schema: { type: string } }
@@ -155,12 +186,14 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Simulation" }
+        "503": { $ref: "#/components/responses/StorageFailure" }
   /v1/simulations/{simulationId}:
     parameters:
       - { name: simulationId, in: path, required: true, schema: { type: string } }
     get:
       operationId: getSimulation
       responses:
+        "503": { $ref: "#/components/responses/StorageFailure" }
         "200":
           description: Immutable simulation snapshot
           content:
@@ -172,6 +205,7 @@ paths:
     get:
       operationId: getReport
       responses:
+        "503": { $ref: "#/components/responses/StorageFailure" }
         "200":
           description: Evidence and simulation report, not a production guarantee
           content:
@@ -187,7 +221,37 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ValidationStatus" }
 components:
+  responses:
+    StorageFailure:
+      description: >-
+        Storage unavailable or capacity exhausted (two processes, zero queued).
+        Running work has an 800 ms deadline plus up to 400 ms termination/reaping.
+        STORAGE_OUTCOME_UNCERTAIN means a mutation may have committed; check history
+        after recovery and do not blindly replay it. Never automatically retry mutations.
+        Cookies are unchanged. Reads/health may retry after at least two seconds
+        with jitter and bounded exponential backoff; health failure probes cool down
+        for 500 ms. Retry-After is omitted for mutation requests.
+      headers:
+        X-Correlation-ID:
+          schema: { type: string }
+        Cache-Control:
+          schema: { type: string, const: no-store }
+        Retry-After:
+          description: Present only for reads/health; minimum delay in seconds.
+          schema: { type: string, const: "2" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/StorageError" }
   schemas:
+    StorageError:
+      type: object
+      required: [error, code, correlation_id]
+      properties:
+        error: { type: string }
+        code:
+          type: string
+          enum: [STORAGE_UNAVAILABLE, STORAGE_OVERLOADED, STORAGE_OUTCOME_UNCERTAIN]
+        correlation_id: { type: string }
     HealthStatus:
       type: object
       required: [status]

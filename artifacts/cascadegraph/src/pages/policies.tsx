@@ -94,7 +94,7 @@ function PoliciesView({ analysis }: { analysis: Analysis }) {
   const current = analysis.policies.find((p) => p.id === wanted) ?? analysis.policies[0];
   return (
     <>
-      <PageHeader kicker="02 / policies" title="Retry policy inspection">
+      <PageHeader kicker="policies" title="Retry policy inspection">
         Source counts are framework-specific (retries vs attempts). Every policy is normalized to <span className="font-medium text-foreground">total attempts including the first call</span>; check the normalization against evidence before trusting a simulation. <Link href={`/analyses/${analysis.id}`} className="text-primary underline-offset-2 hover:underline">Back to graph</Link>
       </PageHeader>
       {!analysis.policies.length ? <EmptyState title="No retry policies extracted">Nothing matched the supported parsers. See Scope & limits for what is recognised.</EmptyState> : (

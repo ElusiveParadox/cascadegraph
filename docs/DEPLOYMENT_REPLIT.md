@@ -5,14 +5,15 @@ health is claimed in this repository.
 
 Before publication: require passing Python/types/frontend/browser/Compose checks,
 review safe validation artifacts, verify opt-in AI configuration with Secrets,
-and visibly disclose ephemeral SQLite, retention, anonymous sessions and limits.
+and visibly disclose retention, anonymous sessions and limits.
 Do not put secrets in frontend builds or repository files.
 
-For the initial public demo, publish only the bounded sample/ZIP functionality,
-with no private multi-user promise. Writable SQLite may reset across deployment
-changes; export reports. Long-lived private use needs separately approved durable
-storage, authentication/authorization, centralized rate limits and operational
-retention/backup procedures. Do not silently migrate this database.
+The API now uses managed PostgreSQL through `DATABASE_URL`; see POSTGRESQL.md.
+Apply the schema to development and let Publish apply the production diff.
+Never add startup/build-time production DDL. Explicit SQLite mode is local/test
+only. Public GitHub, source-file and ZIP intake remain bounded and never execute
+source. No private multi-user promise is made. Long-lived private use still
+requires authentication, centralized rate limits and retention/backup procedures.
 
 After user-approved publication obtain the actual production URL from the platform,
 then smoke-check health, sample analysis, simulation, export and deletion there.

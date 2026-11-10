@@ -146,7 +146,7 @@ export default function SimulationPage() {
   return (
     <WithAnalysis id={id}>{(a) => (
       <>
-        <PageHeader kicker="03 / simulation" title="Scenario editor">
+        <PageHeader kicker="simulation" title="Scenario editor">
           Discrete-event simulation of <Link href={`/analyses/${a.id}`} className="font-medium text-foreground underline-offset-2 hover:underline">{a.name}</Link>. Bounded and synchronous: results return with the request.
         </PageHeader>
         <div className="grid gap-4 xl:grid-cols-[1fr_320px]">

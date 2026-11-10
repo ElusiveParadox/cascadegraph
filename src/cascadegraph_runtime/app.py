@@ -7,6 +7,7 @@ import os
 import time
 import uuid
 from collections import defaultdict, deque
+from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
@@ -44,6 +45,7 @@ from .security import (
     validate_sources,
 )
 from .simulation import simulate
+from .storage_execution import StorageExecutor, StorageUnavailable
 
 logger = logging.getLogger("cascadegraph")
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -51,7 +53,7 @@ LIMITATIONS = [
     "Supports bounded Python Tenacity/urllib3, Istio VirtualService and Compose syntax only.",
     "Custom-loop AI support is restricted to the bundled range-loop pattern and requires explicit opt-in.",
     "Public GitHub root URLs only; no arbitrary hosts, redirect following or private GitHub credentials. Private source must be uploaded.",
-    "SQLite demo storage may reset on republish; export reports. Analyses expire after 24 hours.",
+    "Analyses expire after 24 hours and belong to this anonymous browser session; export important reports.",
     "The simulator supports acyclic call paths and sequential fan-out, not arbitrary production behavior.",
     "Measured validation describes only the committed sample and matching CI scenarios, never an uploaded application.",
 ]
@@ -65,7 +67,31 @@ class SafetyMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request, call_next):
         correlation = str(uuid.uuid4())
+        request.state.correlation = correlation
         started = time.monotonic()
+        try:
+            response = await self.handle(request, call_next)
+        except StorageUnavailable as exc:
+            response = storage_error(request, exc)
+        except HTTPException as exc:
+            response = JSONResponse({"error": exc.detail}, exc.status_code)
+        except Exception:
+            logger.error(json.dumps({"correlation_id": correlation, "event": "unexpected_error"}))
+            response = JSONResponse({"error": "Operation failed.", "code": "INTERNAL_ERROR",
+                                     "correlation_id": correlation}, 500)
+        response.headers.update({
+            "X-Correlation-ID": correlation, "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
+        })
+        logger.info(json.dumps({"correlation_id": correlation, "method": request.method,
+                               "status": response.status_code,
+                               "duration_ms": round((time.monotonic() - started) * 1000)}))
+        return response
+
+    async def handle(self, request, call_next):
+        if request.url.path in {"/api/healthz", "/api/v1/health/live", "/api/v1/health/ready"}:
+            # Operational health is independent of client rate/session state.
+            return await call_next(request)
         mutating = request.method in {"POST", "PATCH", "DELETE"}
         origin = request.headers.get("origin")
         if mutating and origin and urlparse(origin).netloc != request.headers.get("host"):
@@ -85,15 +111,18 @@ class SafetyMiddleware(BaseHTTPMiddleware):
         if len(reads) >= 240:
             return JSONResponse({"error": "Request limit reached. Retry in one minute."}, 429)
         reads.append(now)
+        # Health and informational endpoints do not depend on owner history.
+        if request.url.path in {
+            "/api/v1/validation", "/api/docs", "/api/openapi.json",
+        }:
+            return await call_next(request)
         token = request.cookies.get("cg_session", "")
         if len(token) > 64:
             token = ""
-        new = not token or not store.session_exists(token)
-        if new:
-            try:
-                token = store.create_session()
-            except ValueError:
-                return JSONResponse({"error": "Demo session capacity reached"}, 429)
+        try:
+            token, new = await request.app.state.storage.run(store.resolve_session, token, mutation=True)
+        except ValueError:
+            return JSONResponse({"error": "Demo session capacity reached"}, 429)
         request.state.owner = token
         if mutating:
             # Peer+session limits prevent bypass by discarding the cookie.
@@ -134,24 +163,62 @@ class SafetyMiddleware(BaseHTTPMiddleware):
                 response = await call_next(request)
         except HTTPException as exc:
             response = JSONResponse({"error": exc.detail}, exc.status_code)
-        except Exception:
-            logger.error(json.dumps({"correlation_id": correlation, "event": "unexpected_error"}))
-            response = JSONResponse({"error": "Operation failed; retry or inspect the supported input format.", "code": "INTERNAL_ERROR", "correlation_id": correlation}, 500)
-        if new:
+        if new and response.status_code < 500:
             secure = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
             response.set_cookie("cg_session", token, max_age=86400, httponly=True, secure=secure, samesite="strict", path="/api")
-        response.headers.update({
-            "X-Correlation-ID": correlation, "X-Content-Type-Options": "nosniff",
-            "Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
-        })
-        logger.info(json.dumps({"correlation_id": correlation, "method": request.method,
-                               "status": response.status_code, "duration_ms": round((time.monotonic() - started) * 1000)}))
         return response
 
 
-app = FastAPI(title="CascadeGraph", version="1.0.0", docs_url="/api/docs",
+@asynccontextmanager
+async def lifespan(application):
+    storage = getattr(application.state, "storage", None)
+    if storage is None or storage.users == 0:
+        if store.uses_postgres():
+            from .postgres_execution import PostgresExecutor
+
+            storage = PostgresExecutor()
+        else:
+            storage = StorageExecutor()
+        application.state.storage = storage
+        try:
+            await storage.run(store.initialize, mutation=True)
+        except StorageUnavailable:
+            # A storage outage must not prevent the liveness server from starting.
+            pass
+    storage.users += 1
+    try:
+        yield
+    finally:
+        storage.users -= 1
+        if storage.users == 0:
+            await storage.close()
+
+
+def storage_error(request, exc):
+    uncertain = exc.code == "STORAGE_OUTCOME_UNCERTAIN"
+    message = (
+        "Storage outcome is uncertain. Check history after recovery; do not blindly replay this mutation."
+        if uncertain else "History storage is temporarily unavailable. Mutations are not automatically retried."
+    )
+    logger.warning(json.dumps({"correlation_id": request.state.correlation, "event": exc.code}))
+    headers = {} if request.method in {"POST", "PATCH", "DELETE"} else {"Retry-After": "2"}
+    return JSONResponse({"error": message, "code": exc.code,
+                         "correlation_id": request.state.correlation}, 503, headers=headers)
+
+
+app = FastAPI(title="CascadeGraph", version="1.0.0", docs_url="/api/docs", lifespan=lifespan,
               openapi_url="/api/openapi.json", redoc_url=None)
 app.add_middleware(SafetyMiddleware)
+
+
+@app.exception_handler(StorageUnavailable)
+async def unavailable(request, exc):
+    return storage_error(request, exc)
+
+
+@app.exception_handler(PermissionError)
+async def inaccessible(request, exc):
+    return JSONResponse({"error": "Object not found or expired"}, 404)
 
 
 @app.exception_handler(InputError)
@@ -166,8 +233,8 @@ async def invalid_request(request, exc):
                          "fields": [{"location": list(e["loc"]), "message": e["msg"]} for e in exc.errors()]}, 422)
 
 
-def owned(request, aid) -> Analysis:
-    data = store.get_analysis(request.state.owner, aid)
+async def owned(request, aid) -> Analysis:
+    data = await request.app.state.storage.run(store.get_analysis, request.state.owner, aid)
     if not data:
         raise HTTPException(404, detail="Analysis not found or expired")
     return Analysis.model_validate(data)
@@ -175,14 +242,13 @@ def owned(request, aid) -> Analysis:
 
 @app.get("/api/healthz", operation_id="healthCheck")
 @app.get("/api/v1/health/live")
-def health():
+async def health():
     return {"status": "ok"}
 
 
 @app.get("/api/v1/health/ready")
-def ready():
-    with store.database() as db:
-        db.execute("SELECT 1")
+async def ready(request: Request):
+    await request.app.state.storage.ready()
     return {"status": "ok"}
 
 
@@ -190,7 +256,7 @@ def ready():
 def system_status():
     return dict(version="1.0.0", model_version=MODEL_VERSION, ai_available=ai_available(),
                 ai_provider=os.getenv("LLM_PROVIDER", "replit_openai"),
-                storage="SQLite · session-owned · 24-hour retention · ephemeral demo",
+                storage=store.storage_description(),
                 supported_parsers=["Docker Compose", "Tenacity", "urllib3 / requests", "Istio VirtualService", "Sample custom loop (opt-in AI)"],
                 limitations=LIMITATIONS, max_archive_mb=MAX_ARCHIVE // (1024 * 1024), max_files=MAX_FILES,
                 max_expanded_mb=MAX_EXPANDED // (1024 * 1024), max_source_mb=MAX_SOURCE // (1024 * 1024),
@@ -198,16 +264,17 @@ def system_status():
 
 
 @app.get("/api/v1/analyses", operation_id="listAnalyses")
-def list_runs(request: Request):
+async def list_runs(request: Request):
     keys = {"id", "name", "source_type", "status", "created_at", "expires_at", "file_count", "service_count", "policy_count"}
-    return [{k: v for k, v in row.items() if k in keys} for row in store.list_analyses(request.state.owner)]
+    rows = await request.app.state.storage.run(store.list_analyses, request.state.owner)
+    return [{k: v for k, v in row.items() if k in keys} for row in rows]
 
 
 @app.post("/api/v1/analyses", status_code=201, operation_id="createAnalysis")
 async def create_run(data: AnalysisInput, request: Request):
     result = await asyncio.wait_for(analyze(sample_files(), "Checkout reliability sample", "sample", data.use_ai), 90)
     try:
-        store.save_analysis(request.state.owner, result.model_dump())
+        await request.app.state.storage.run(store.save_analysis, request.state.owner, result.model_dump(), mutation=True)
     except ValueError as exc:
         raise InputError(str(exc)) from exc
     return result
@@ -239,7 +306,7 @@ async def analyze_submission(request, files, name, source_type, use_ai, project_
         if repository.supplemented_paths:
             result.assumptions.append("User-uploaded source supplements/overrides repository paths; those excerpts are not claimed to originate from the pinned commit.")
     try:
-        store.save_analysis(request.state.owner, result.model_dump())
+        await request.app.state.storage.run(store.save_analysis, request.state.owner, result.model_dump(), mutation=True)
     except ValueError as exc:
         raise InputError(str(exc)) from exc
     return result
@@ -288,20 +355,20 @@ async def source_analysis(
 
 
 @app.get("/api/v1/analyses/{analysisId}", operation_id="getAnalysis")
-def analysis_detail(analysisId: str, request: Request):
-    return owned(request, analysisId)
+async def analysis_detail(analysisId: str, request: Request):
+    return await owned(request, analysisId)
 
 
 @app.delete("/api/v1/analyses/{analysisId}", status_code=204, operation_id="deleteAnalysis")
-def delete_run(analysisId: str, request: Request):
-    owned(request, analysisId)
-    store.delete_analysis(request.state.owner, analysisId)
+async def delete_run(analysisId: str, request: Request):
+    await owned(request, analysisId)
+    await request.app.state.storage.run(store.delete_analysis, request.state.owner, analysisId, mutation=True)
     return Response(status_code=204)
 
 
 @app.patch("/api/v1/analyses/{analysisId}/policies/{policyId}", operation_id="confirmPolicy")
-def confirm_policy(analysisId: str, policyId: str, data: PolicyConfirmation, request: Request):
-    a = owned(request, analysisId)
+async def confirm_policy(analysisId: str, policyId: str, data: PolicyConfirmation, request: Request):
+    a = await owned(request, analysisId)
     p = next((p for p in a.policies if p.id == policyId), None)
     if p is None:
         raise HTTPException(404, detail="Policy not found")
@@ -314,38 +381,38 @@ def confirm_policy(analysisId: str, policyId: str, data: PolicyConfirmation, req
     p.confidence = "user_confirmed"
     # Original source_value and source evidence remain immutable.
     refresh_policy_findings(a)
-    store.save_analysis(request.state.owner, a.model_dump())
+    await request.app.state.storage.run(store.save_analysis, request.state.owner, a.model_dump(), mutation=True)
     return a
 
 
 @app.post("/api/v1/analyses/{analysisId}/edges/{edgeId}/confirm", operation_id="confirmEdge")
-def confirm_edge(analysisId: str, edgeId: str, data: EdgeConfirmation, request: Request):
-    a = owned(request, analysisId)
+async def confirm_edge(analysisId: str, edgeId: str, data: EdgeConfirmation, request: Request):
+    a = await owned(request, analysisId)
     e = next((e for e in a.edges if e.id == edgeId), None)
     if not e:
         raise HTTPException(404, detail="Edge not found")
     e.confirmed, e.confirmation_note = True, redact(data.note)
-    store.save_analysis(request.state.owner, a.model_dump())
+    await request.app.state.storage.run(store.save_analysis, request.state.owner, a.model_dump(), mutation=True)
     return a
 
 
 @app.post("/api/v1/analyses/{analysisId}/simulations", status_code=201, operation_id="runSimulation")
-def run_simulation(analysisId: str, data: Scenario, request: Request):
-    a = owned(request, analysisId)
+async def run_simulation(analysisId: str, data: Scenario, request: Request):
+    a = await owned(request, analysisId)
     result = dict(id=str(uuid.uuid4()), analysis_id=a.id, created_at=utcnow(), model_version=MODEL_VERSION,
                   scenario=data.model_dump(), baseline=simulate(a, data),
                   candidate=simulate(a, data, candidate=True) if data.candidate_attempts is not None else None,
                   policies=[p.model_dump() for p in a.policies])
     try:
-        store.save_simulation(request.state.owner, result)
+        await request.app.state.storage.run(store.save_simulation, request.state.owner, result, mutation=True)
     except ValueError as exc:
         raise InputError(str(exc)) from exc
     return result
 
 
 @app.get("/api/v1/simulations/{simulationId}", operation_id="getSimulation")
-def simulation_detail(simulationId: str, request: Request):
-    data = store.get_simulation(request.state.owner, simulationId)
+async def simulation_detail(simulationId: str, request: Request):
+    data = await request.app.state.storage.run(store.get_simulation, request.state.owner, simulationId)
     if data is None:
         raise HTTPException(404, detail="Simulation not found or expired")
     return data
@@ -366,8 +433,8 @@ def validation():
 
 
 @app.get("/api/v1/analyses/{analysisId}/report", operation_id="getReport")
-def report(analysisId: str, request: Request):
-    a = owned(request, analysisId)
+async def report(analysisId: str, request: Request):
+    a = await owned(request, analysisId)
     return dict(schema_version="1.0", generated_at=utcnow(), analysis=a,
-                simulations=store.simulations(request.state.owner, analysisId),
+                simulations=await request.app.state.storage.run(store.simulations, request.state.owner, analysisId),
                 measured_validation=validation_status(), limitations=LIMITATIONS)

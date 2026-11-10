@@ -13,6 +13,22 @@ export const HealthCheckResponse = zod.object({
 })
 
 
+/**
+ * No database access, rate admission, or owner-cookie creation.
+ */
+export const LivenessCheckResponse = zod.object({
+  "status": zod.string()
+})
+
+
+/**
+ * Bounded non-mutating database probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms.
+ */
+export const ReadinessCheckResponse = zod.object({
+  "status": zod.string()
+})
+
+
 export const GetSystemStatusResponse = zod.object({
   "version": zod.string(),
   "model_version": zod.string(),

@@ -4,6 +4,8 @@ import { useAnalyzeRepository, useAnalyzeSources, type Analysis, type SystemStat
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ErrorPanel, Panel } from "@/components/common";
+import { FileDropZone } from "@/components/file-drop-zone";
+import { SOURCE_ACCEPT, sourceSelectionError } from "@/lib/file-intake";
 
 type SourceFile = { file: File; path: string };
 type Props = {
@@ -23,6 +25,7 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
   const [files, setFiles] = useState<SourceFile[]>([]);
   const [ai, setAi] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const repository = useAnalyzeRepository({ mutation: { onSuccess: onAnalyzed } });
   const sources = useAnalyzeSources({ mutation: { onSuccess: onAnalyzed } });
   const busy = repository.isPending || sources.isPending;
@@ -32,15 +35,21 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
   if (url.trim() && !/^https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+\/?$/.test(url.trim())) {
     errors.push("Use https://github.com/owner/repository, without credentials or query parameters.");
   }
-  if (files.length > (limits?.max_source_files ?? 100)) errors.push("Select at most 100 source files; use a ZIP for larger sets.");
+  const fileError = limits ? sourceSelectionError(files.map(f => f.file), limits) : null;
+  if (fileError) errors.push(fileError);
   if (new Set(files.map(f => f.path)).size !== files.length) errors.push("Each uploaded file needs a distinct repository-relative path.");
   if (files.some(f => !f.path.trim() || f.path.startsWith("/") || f.path.includes("..") || f.path.includes("\\"))) {
     errors.push("File paths must be relative, without traversal or backslashes.");
   }
-  if (files.some(f => f.file.size > (limits?.max_file_kb ?? 512) * 1024)) errors.push("A selected source file exceeds the 512 KiB per-file limit.");
-  if (files.reduce((sum, f) => sum + f.file.size, 0) > (limits?.max_source_mb ?? 20) * 1024 * 1024) {
-    errors.push("Selected supported source exceeds 20 MiB; select only the relevant application.");
-  }
+  const intakeDisabled = disabled || busy || !limits;
+  const addFiles = (incoming: File[]) => {
+    if (intakeDisabled || !limits || !incoming.length) return;
+    const error = sourceSelectionError([...files.map(f => f.file), ...incoming], limits);
+    setSelectionError(error);
+    if (error) return;
+    const prefix = project.trim() && project.trim() !== "." ? project.trim().replace(/\/+$/, "") + "/" : "";
+    setFiles(current => [...current, ...incoming.map(file => ({ file, path: file.webkitRelativePath || prefix + file.name }))]);
+  };
   return (
     <Panel title={<span className="flex items-center gap-2"><Github className="h-4 w-4" />Repository URL / source files</span>} meta="public GitHub · read-only">
       <form className="space-y-4" data-testid="form-source-intake" onSubmit={e => {
@@ -67,15 +76,16 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
             <Input value={project} maxLength={200} onChange={e => setProject(e.target.value)} placeholder="e.g. sample-app" className="num mt-1" data-testid="input-project-path" />
           </label>
         </div>
-        <div className="min-w-0 rounded-sm border border-dashed border-border p-3">
+        <FileDropZone disabled={intakeDisabled} onFiles={addFiles} testId="drop-source-files">
           <label className="block text-xs font-medium"><FilePlus2 className="mr-1 inline h-3.5 w-3.5" />Add source/configuration files
-            <Input type="file" multiple accept=".py,.yaml,.yml,.toml,.txt" className="mt-2 max-w-full" data-testid="input-source-files"
+            <Input type="file" multiple accept={SOURCE_ACCEPT} disabled={intakeDisabled} className="mt-2 max-w-full" data-testid="input-source-files"
               onChange={e => {
-                const prefix = project.trim() && project.trim() !== "." ? project.trim().replace(/\/+$/, "") + "/" : "";
-                const next = Array.from(e.target.files ?? []).map(file => ({ file, path: file.webkitRelativePath || prefix + file.name }));
-                setFiles(current => [...current, ...next]); e.target.value = "";
+                addFiles(Array.from(e.target.files ?? [])); e.target.value = "";
               }} />
           </label>
+          {selectionError && <p role="alert" className="mt-2 text-xs text-destructive">{selectionError} No files were added; your previous selection is unchanged.</p>}
+          <p role="status" className="num mt-2 text-xs text-muted-foreground">{files.length} source files selected · {(files.reduce((sum, f) => sum + f.file.size, 0) / 1024).toFixed(1)} KiB total</p>
+          {limits && <p className="mt-1 text-xs text-muted-foreground">Up to {limits.max_source_files} files · {limits.max_file_kb} KiB each · {limits.max_source_mb} MiB total</p>}
           <p className="mt-2 text-xs text-muted-foreground">Use Python retry/client files, Compose or Istio YAML. Edit each relative path if it belongs in a subfolder. Files supplement or override the public snapshot. For private repositories, leave the URL blank and upload files or a ZIP—never a token.</p>
           {files.length > 0 && <div className="mt-3 space-y-2">
             {files.map((source, index) => (
@@ -84,18 +94,18 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
                   <Input aria-label={`Relative path for ${source.file.name}`} value={source.path} maxLength={300} className="num mt-1"
                     data-testid={`input-source-path-${index}`} onChange={e => setFiles(current => current.map((f, i) => i === index ? { ...f, path: e.target.value } : f))} /></div>
                 <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${source.file.name}`}
-                  onClick={() => setFiles(current => current.filter((_, i) => i !== index))}><X className="h-4 w-4" /></Button>
+                  onClick={() => { setFiles(current => current.filter((_, i) => i !== index)); setSelectionError(null); }}><X className="h-4 w-4" /></Button>
               </div>
             ))}
             {url && <Button type="button" size="sm" variant="outline" onClick={() => { setUrl(""); setRef(""); }}>Use uploaded files only</Button>}
           </div>}
-        </div>
+        </FileDropZone>
         <label className="flex items-start gap-2 text-xs">
-          <input type="checkbox" checked={ai} disabled={!limits?.ai_available} onChange={e => setAi(e.target.checked)} className="mt-0.5" data-testid="checkbox-repository-ai" />
+          <input type="checkbox" checked={ai} disabled={!limits?.ai_available} onChange={e => setAi(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" data-testid="checkbox-repository-ai" />
           <span>Use AI-assisted extraction <span className="num text-[10px] text-primary">OPT-IN, BILLED</span><span className="mt-1 block text-muted-foreground">Optional redacted source excerpts are sent to an external model and billed to credits. Leave unchecked to keep parsing local.</span></span>
         </label>
         {limits && <p className="num text-[10.5px] text-muted-foreground">ZIP/download ≤ {limits.max_archive_mb} MiB · expanded ≤ {limits.max_expanded_mb} MiB · supported source ≤ {limits.max_source_mb} MiB · each source ≤ {limits.max_file_kb} KiB</p>}
-        {submitted && errors.length > 0 && <ul role="alert" className="space-y-1 text-xs text-destructive">{errors.map(error => <li key={error}>{error}</li>)}</ul>}
+        {(submitted || files.length > 0) && errors.length > 0 && <ul role="alert" className="space-y-1 text-xs text-destructive">{errors.map(error => <li key={error}>{error}</li>)}</ul>}
         {repository.isError && <ErrorPanel error={repository.error} title="Repository could not be analyzed" />}
         {sources.isError && <ErrorPanel error={sources.error} title="Source files could not be analyzed" />}
         <Button type="submit" disabled={disabled || busy || !limits} data-testid="button-analyze-repository">

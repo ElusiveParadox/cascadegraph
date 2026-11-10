@@ -6,7 +6,7 @@ export default function HelpPage() {
   const h = useHealthCheck();
   return (
     <>
-      <PageHeader kicker="07 / scope" title="What CascadeGraph does, and does not, claim">
+      <PageHeader kicker="scope" title="What CascadeGraph does, and does not, claim">
         A static extractor plus a deterministic simulator. It shows where retries can multiply under stated assumptions; it is not a production load test.
       </PageHeader>
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">

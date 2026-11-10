@@ -71,7 +71,7 @@ function AnalysisView({ analysis }: { analysis: Analysis }) {
   const hot = new Set(analysis.policies.map((p) => p.service_id).filter((x): x is string => !!x));
   return (
     <>
-      <PageHeader kicker={`01 / analysis · ${analysis.source_type}`} title={analysis.name}
+      <PageHeader kicker={`analysis · ${analysis.source_type}`} title={analysis.name}
         actions={<>
           <Button asChild variant="outline" size="sm"><Link href={`/policies/${analysis.id}`} data-testid="link-to-policies"><SlidersHorizontal className="mr-1.5 h-4 w-4" />Policies</Link></Button>
           <Button asChild size="sm"><Link href={`/simulation/${analysis.id}`} data-testid="link-to-simulation"><FlaskConical className="mr-1.5 h-4 w-4" />Simulate</Link></Button>

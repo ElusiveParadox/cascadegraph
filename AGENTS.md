@@ -13,7 +13,8 @@ TASKS.md before editing.
 - Keep simulated and measured results separate. Never fabricate evidence.
 - AI sees bounded, redacted, explicitly opted-in source, with no tools/secrets.
 - Only the committed sample app runs in Docker, on GitHub Actions, not Replit.
-- SQLite is development/demo storage, not a claim of durable production storage.
+- PostgreSQL is live storage; explicit SQLite is local/test-only. Preserve
+  anonymous ownership and retention. Production schema changes belong to Publish.
 
 ## Delivery
 Use feature branches and Conventional Commits. Do not rewrite main or platform
