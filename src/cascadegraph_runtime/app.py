@@ -16,7 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import store
 from .ai import ai_available
-from .analysis import analyze, utcnow
+from .analysis import analyze, refresh_policy_findings, utcnow
 from .models import MODEL_VERSION, Analysis, AnalysisInput, EdgeConfirmation, PolicyConfirmation, Scenario
 from .security import MAX_ARCHIVE, MAX_FILES, ROOT, InputError, ingest_zip, redact, sample_files
 from .simulation import simulate
@@ -214,6 +214,7 @@ def confirm_policy(analysisId: str, policyId: str, data: PolicyConfirmation, req
     p.confirmed, p.confirmation_note = True, redact(data.note)
     p.confidence = "user_confirmed"
     # Original source_value and source evidence remain immutable.
+    refresh_policy_findings(a)
     store.save_analysis(request.state.owner, a.model_dump())
     return a
 

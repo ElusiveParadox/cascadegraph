@@ -20,7 +20,7 @@ export function ValidationView({ v }: { v: ValidationStatus }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm" data-testid="table-validation">
             <thead><tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-              {["Case", "Logical req", "Predicted amp.", "Measured amp.", "Abs. error", "Predicted ok", "Measured ok"].map((h, i) => <th key={h} className={`py-2 pr-3 font-medium ${i ? "text-right" : ""}`}>{h}</th>)}
+              {["Case", "Logical req", "Predicted amp.", "Measured amp.", "Abs. error", "Predicted ok", "Measured ok", "Pred. deadline", "Meas. deadline", "Meas. retries"].map((h, i) => <th key={h} className={`py-2 pr-3 font-medium ${i ? "text-right" : ""}`}>{h}</th>)}
             </tr></thead>
             <tbody>{v.cases.map((c) => (
               <tr key={c.name} className="border-b border-dashed border-border last:border-0">
@@ -31,6 +31,9 @@ export function ValidationView({ v }: { v: ValidationStatus }) {
                 <td className="num py-1.5 pr-3 text-right">{fmtNum(c.absolute_error, 3)}</td>
                 <td className="num py-1.5 pr-3 text-right">{c.predicted_successes}</td>
                 <td className="num py-1.5 text-right">{c.measured_successes}</td>
+                <td className="num py-1.5 pl-3 text-right">{c.predicted_deadline_misses ?? "not recorded"}</td>
+                <td className="num py-1.5 pl-3 text-right">{c.measured_deadline_misses ?? "not recorded"}</td>
+                <td className="num py-1.5 pl-3 text-right">{c.measured_retry_attempts ?? "not recorded"}</td>
               </tr>))}</tbody>
           </table>
         </div>

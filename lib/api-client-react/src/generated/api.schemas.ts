@@ -318,6 +318,9 @@ export interface MeasuredCase {
   predicted_successes: number;
   measured_successes: number;
   logical_requests: number;
+  predicted_deadline_misses?: number;
+  measured_deadline_misses?: number;
+  measured_retry_attempts?: number;
 }
 
 export interface ValidationStatus {

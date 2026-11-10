@@ -43,6 +43,7 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
+  'postcss-selector-parser@6.0.10': ^6.1.5
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-arm64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-x64': '-'

@@ -1,0 +1,87 @@
+{
+  "status": "measured",
+  "detail": "Six controlled, low-load CI sample experiments. Counts are compared; production latency accuracy is not claimed. Deadline measurements are workload elapsed-time budget misses, not distributed cancellation. Single repetition only.",
+  "workflow_url": "https://github.com/ElusiveParadox/cascadegraph/actions/runs/42806237498",
+  "commit_sha": "a521cdf9ffd1782b64b702ad099a9cbb1510a17a",
+  "measured_at": "2026-11-10T11:18:07.883968+00:00",
+  "cases": [
+    {
+      "name": "Healthy baseline",
+      "predicted_amplification": 2.0,
+      "measured_amplification": 2.0,
+      "absolute_error": 0.0,
+      "predicted_successes": 10,
+      "measured_successes": 10,
+      "predicted_deadline_misses": 0,
+      "measured_deadline_misses": 0,
+      "measured_outgoing_requests": {"gateway": 10, "order": 10},
+      "measured_retry_attempts": 0,
+      "logical_requests": 10
+    },
+    {
+      "name": "Fixed downstream latency",
+      "predicted_amplification": 2.0,
+      "measured_amplification": 2.0,
+      "absolute_error": 0.0,
+      "predicted_successes": 10,
+      "measured_successes": 10,
+      "predicted_deadline_misses": 0,
+      "measured_deadline_misses": 0,
+      "measured_outgoing_requests": {"gateway": 10, "order": 10},
+      "measured_retry_attempts": 0,
+      "logical_requests": 10
+    },
+    {
+      "name": "Intermittent 503s",
+      "predicted_amplification": 2.2,
+      "measured_amplification": 2.2,
+      "absolute_error": 0.0,
+      "predicted_successes": 10,
+      "measured_successes": 10,
+      "predicted_deadline_misses": 0,
+      "measured_deadline_misses": 0,
+      "measured_outgoing_requests": {"gateway": 10, "order": 12},
+      "measured_retry_attempts": 2,
+      "logical_requests": 10
+    },
+    {
+      "name": "All leaf requests fail",
+      "predicted_amplification": 12.0,
+      "measured_amplification": 12.0,
+      "absolute_error": 0.0,
+      "predicted_successes": 0,
+      "measured_successes": 0,
+      "predicted_deadline_misses": 0,
+      "measured_deadline_misses": 0,
+      "measured_outgoing_requests": {"gateway": 30, "order": 90},
+      "measured_retry_attempts": 80,
+      "logical_requests": 10
+    },
+    {
+      "name": "No retries alternative",
+      "predicted_amplification": 2.0,
+      "measured_amplification": 2.0,
+      "absolute_error": 0.0,
+      "predicted_successes": 0,
+      "measured_successes": 0,
+      "predicted_deadline_misses": 0,
+      "measured_deadline_misses": 0,
+      "measured_outgoing_requests": {"gateway": 10, "order": 10},
+      "measured_retry_attempts": 0,
+      "logical_requests": 10
+    },
+    {
+      "name": "Downstream timeouts",
+      "predicted_amplification": 12.0,
+      "measured_amplification": 12.0,
+      "absolute_error": 0.0,
+      "predicted_successes": 0,
+      "measured_successes": 0,
+      "predicted_deadline_misses": 0,
+      "measured_deadline_misses": 0,
+      "measured_outgoing_requests": {"gateway": 30, "order": 90},
+      "measured_retry_attempts": 80,
+      "logical_requests": 10
+    }
+  ]
+}

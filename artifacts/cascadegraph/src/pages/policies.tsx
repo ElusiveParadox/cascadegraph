@@ -33,7 +33,7 @@ function ConfirmForm({ analysisId, policy }: { analysisId: string; policy: Polic
   return (
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (!errs.length) m.mutate({ analysisId, policyId: policy.id, data: { max_total_attempts: a, note: note.trim(), per_attempt_timeout_ms: t, overall_deadline_ms: d } }); }}>
       <p className="text-xs text-muted-foreground">Your values are recorded as a reviewer correction. Original source facts (semantics, raw value, evidence) are preserved and remain visible.</p>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="text-xs font-medium">Max total attempts<Input type="number" min={1} max={10} step={1} value={attempts} onChange={(e) => setAttempts(e.target.value)} className="num mt-1" data-testid="input-max-attempts" /><span className="text-[10.5px] font-normal text-muted-foreground">includes first call</span></label>
         <label className="text-xs font-medium">Per-attempt timeout (ms)<Input type="number" min={1} max={60000} value={timeout} onChange={(e) => setTimeoutMs(e.target.value)} placeholder="optional" className="num mt-1" data-testid="input-policy-timeout" /></label>
         <label className="text-xs font-medium">Overall deadline (ms)<Input type="number" min={1} max={120000} value={deadline} onChange={(e) => setDeadline(e.target.value)} placeholder="optional" className="num mt-1" data-testid="input-policy-deadline" /></label>
@@ -50,13 +50,13 @@ function ConfirmForm({ analysisId, policy }: { analysisId: string; policy: Polic
 function PolicyDetail({ analysis, policy }: { analysis: Analysis; policy: Policy }) {
   const b = policy.backoff;
   return (
-    <div className="space-y-4" data-testid={`panel-policy-${policy.id}`}>
+    <div className="min-w-0 space-y-4" data-testid={`panel-policy-${policy.id}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div><div className="num text-xs text-muted-foreground">{policy.framework}</div><div className="font-display text-xl font-bold">{policy.symbol}</div>
           <div className="num text-[11px] text-muted-foreground">service {policy.service_id ?? "unattributed"} · edge {policy.edge_id ?? "unattributed"}</div></div>
         <div className="flex flex-wrap gap-1"><Tag tone={policy.confirmed ? "ok" : "warn"}>{policy.confirmed ? "confirmed" : "unconfirmed"}</Tag><Tag>{policy.resolution_status}</Tag><Tag>{policy.extraction_method}</Tag><Tag>confidence {policy.confidence}</Tag></div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="rounded-sm border border-border p-3">
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">As written in source</div>
           <dl><KV k="Semantics"><span className="num text-xs">{policy.source_semantics}</span></KV><KV k="Raw value"><Value v={policy.source_value} /></KV></dl>
@@ -68,7 +68,7 @@ function PolicyDetail({ analysis, policy }: { analysis: Analysis; policy: Policy
             <KV k="Overall deadline"><Value v={policy.overall_deadline_ms} unit="ms" /></KV></dl>
         </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div><div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Backoff</div>
           <dl><KV k="Kind">{b.kind === "unknown" ? <Unknown /> : <span className="num">{b.kind}</span>}</KV><KV k="Delay"><Value v={b.delay_ms} unit="ms" /></KV>
             <KV k="Multiplier"><span className="num">{b.multiplier}</span></KV><KV k="Cap"><Value v={b.cap_ms} unit="ms" /></KV><KV k="Jitter"><span className="num">{b.jitter_ms} ms</span></KV></dl></div>
@@ -98,7 +98,7 @@ function PoliciesView({ analysis }: { analysis: Analysis }) {
         Source counts are framework-specific (retries vs attempts). Every policy is normalized to <span className="font-medium text-foreground">total attempts including the first call</span>; check the normalization against evidence before trusting a simulation. <Link href={`/analyses/${analysis.id}`} className="text-primary underline-offset-2 hover:underline">Back to graph</Link>
       </PageHeader>
       {!analysis.policies.length ? <EmptyState title="No retry policies extracted">Nothing matched the supported parsers. See Scope & limits for what is recognised.</EmptyState> : (
-        <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
           <Panel title="Policies" meta={analysis.policies.length} className="lg:sticky lg:top-6 lg:self-start">
             <ul className="-m-2 space-y-0.5">
               {analysis.policies.map((p) => (

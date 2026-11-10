@@ -1174,7 +1174,10 @@ export const GetReportResponse = zod.object({
   "absolute_error": zod.number(),
   "predicted_successes": zod.int(),
   "measured_successes": zod.int(),
-  "logical_requests": zod.int()
+  "logical_requests": zod.int(),
+  "predicted_deadline_misses": zod.int().optional(),
+  "measured_deadline_misses": zod.int().optional(),
+  "measured_retry_attempts": zod.int().optional()
 }))
 }),
   "limitations": zod.array(zod.string())
@@ -1194,7 +1197,10 @@ export const GetValidationResponse = zod.object({
   "absolute_error": zod.number(),
   "predicted_successes": zod.int(),
   "measured_successes": zod.int(),
-  "logical_requests": zod.int()
+  "logical_requests": zod.int(),
+  "predicted_deadline_misses": zod.int().optional(),
+  "measured_deadline_misses": zod.int().optional(),
+  "measured_retry_attempts": zod.int().optional()
 }))
 })
 

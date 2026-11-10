@@ -21,6 +21,23 @@ def add_finding(a, title, detail, severity="warning"):
     a.findings.append(Finding(title=title, detail=detail, severity=severity))
 
 
+def refresh_policy_findings(a: Analysis) -> None:
+    """Regenerate derived statements after review without altering source facts."""
+    a.findings = [
+        f for f in a.findings
+        if f.title not in {"Policy needs review", "Multiple attempts configured"}
+    ]
+    for policy in a.policies:
+        if policy.unresolved:
+            add_finding(a, "Policy needs review", f"{policy.framework} {policy.symbol}: {'; '.join(policy.unresolved)}")
+        if policy.max_total_attempts is not None and policy.max_total_attempts >= 3:
+            qualifier = "Reviewer-confirmed" if policy.confirmed else "Extracted"
+            add_finding(a, "Multiple attempts configured",
+                        f"{qualifier} {policy.symbol} permits up to {policy.max_total_attempts} total attempts; amplification depends on eligibility, deadlines and topology.",
+                        "info")
+    a.status = "partial" if any(f.severity in {"warning", "error"} for f in a.findings) else "succeeded"
+
+
 async def analyze(files: dict[str, str], name: str, source_type: str, use_ai=False, provider=None) -> Analysis:
     started = time.monotonic()
     a = Analysis(
@@ -145,14 +162,9 @@ async def analyze(files: dict[str, str], name: str, source_type: str, use_ai=Fal
                         add_finding(a, "Policy binding needs declaration", f"{caller} → {target} is inferred; add cascadegraph.yaml policy_symbols to bind the retry call boundary.")
     if len(a.edges) > 40:
         raise InputError("At most 40 call edges are supported")
-    for p in a.policies:
-        if p.unresolved:
-            add_finding(a, "Policy needs review", f"{p.framework} {p.symbol}: {'; '.join(p.unresolved)}")
-        if p.max_total_attempts is not None and p.max_total_attempts >= 3:
-            add_finding(a, "Multiple attempts configured", f"{p.symbol} permits up to {p.max_total_attempts} total attempts; amplification depends on eligibility, deadlines and topology.", "info")
     if not a.edges:
         add_finding(a, "No evidence-backed call edges", "Startup dependencies do not prove communication. Supply explicit topology or supported endpoint references.", "error")
     a.stages.extend(["Original retry semantics normalized", "Evidence-labelled graph assembled"])
     a.service_count, a.policy_count = len(a.nodes), len(a.policies)
-    a.status = "partial" if any(f.severity in {"warning", "error"} for f in a.findings) else "succeeded"
+    refresh_policy_findings(a)
     return a

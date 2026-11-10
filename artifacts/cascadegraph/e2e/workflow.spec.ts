@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 test("inspect, correct, simulate, export and delete an owned analysis", async ({ page }) => {
@@ -14,6 +15,7 @@ test("inspect, correct, simulate, export and delete an owned analysis", async ({
   await page.getByRole("button", { name: /call_order/ }).click();
   await page.getByTestId("input-max-attempts").fill("2");
   await page.getByTestId("input-policy-note").fill("E2E source-backed correction");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   await page.getByTestId("button-confirm-policy").click();
   await expect(page.getByText("Saved. Future simulations", { exact: false })).toBeVisible();
   await page.reload();
@@ -22,6 +24,7 @@ test("inspect, correct, simulate, export and delete an owned analysis", async ({
   const policy = saved.policies.find((p: { symbol: string }) => p.symbol === "call_order");
   expect(policy.source_value).toBe(3);
   expect(policy.confirmed).toBe(true);
+  expect(saved.findings.some((f: { detail: string }) => f.detail.includes("call_order permits up to 3"))).toBe(false);
 
   await page.goto(`/simulation/${id}`);
   await page.getByTestId("input-requests").fill("5");
@@ -39,7 +42,11 @@ test("inspect, correct, simulate, export and delete an owned analysis", async ({
   await page.getByTestId("link-report").click();
   const download = page.waitForEvent("download");
   await page.getByTestId("button-download-report").click();
-  expect((await download).suggestedFilename()).toMatch(/cascadegraph-report-.+\.json/);
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/cascadegraph-report-.+\.json/);
+  const payload = JSON.parse(await readFile((await file.path())!, "utf8"));
+  expect(payload.analysis.id).toBe(id);
+  expect(payload.simulations[0].candidate).not.toBeNull();
   await page.reload();
   await expect(page.getByTestId("button-download-report")).toBeVisible();
 

@@ -1,8 +1,7 @@
 # CascadeGraph
 
-Greenfield computational application. This workspace preparation does not
-implement product features; continue the existing approved build task rather
-than creating a duplicate.
+Evidence-backed retry-policy analyzer and deterministic simulator. Read AGENTS.md
+for engineering rules and PROGRESS.md for executed verification and release gates.
 
 ## Scope and architecture
 
@@ -17,18 +16,19 @@ than creating a duplicate.
 
 Use the managed workflows (they supply service ports and routing):
 
-- `artifacts/cascadegraph: web` — React scaffold at `/`.
+- `artifacts/cascadegraph: web` — React workbench at `/`.
 - `artifacts/api-server: API Server` — Python service at `/api`.
 
 The API workflow uses `uv run --frozen python -m cascadegraph_runtime` and
-requires `PORT`. Its only endpoint is setup readiness at `/api/healthz`.
+requires `PORT`. Health is `/api/healthz`; analysis/simulation APIs are `/api/v1`.
 The retained Express files are unused template files, not the active backend.
-No database or external credentials are needed for these checks.
+SQLite is automatic bounded demo storage. AI is optional, provisioned through
+Replit AI Integrations and unchecked by default. Do not expose credentials.
 
 ## Layout and setup
 
 - `artifacts/cascadegraph/` — web artifact for the approved implementation.
-- `src/cascadegraph_runtime/` — minimal Python runtime readiness scaffold.
+- `src/cascadegraph_runtime/` — FastAPI, safe parsers, AI, simulation and SQLite.
 - `pyproject.toml`, `uv.lock` — reproducible Python dependencies.
 - `.migration-backup/attached_assets/` — original architecture, execution prompt,
   and screenshot (unchanged).
@@ -40,5 +40,8 @@ The package tool manages `.pythonlibs`; do not create a separate virtualenv.
 
 ## Verification record
 
-See `docs/workspace-setup.md` for actual checks and limitations. Product acceptance
-gates, engine implementation, and product UI belong to the existing build task.
+See PROGRESS.md, docs/VALIDATION_PROTOCOL.md and GitHub required checks. Actual
+Compose experiments run on GitHub, never in Replit. Do not push platform history:
+it contains uploaded account screenshots. Use the filtered export described in
+docs/GITHUB_WORKFLOW.md. Production publication and real developer feedback remain
+explicit user-dependent gates; Preview is not a published deployment.

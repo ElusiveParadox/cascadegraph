@@ -388,6 +388,9 @@ components:
         predicted_successes: { type: integer }
         measured_successes: { type: integer }
         logical_requests: { type: integer }
+        predicted_deadline_misses: { type: integer }
+        measured_deadline_misses: { type: integer }
+        measured_retry_attempts: { type: integer }
     ValidationStatus:
       type: object
       required: [status, detail, workflow_url, commit_sha, measured_at, cases]

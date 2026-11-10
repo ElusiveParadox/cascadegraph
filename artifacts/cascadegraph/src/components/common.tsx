@@ -21,14 +21,14 @@ export function PageHeader({ kicker, title, children, actions }: { kicker: strin
 
 export function Panel({ title, meta, children, className, id }: { title?: ReactNode; meta?: ReactNode; children: ReactNode; className?: string; id?: string }) {
   return (
-    <section id={id} className={cn("rise rounded-md border border-card-border bg-card", className)}>
+    <section id={id} className={cn("rise min-w-0 max-w-full rounded-md border border-card-border bg-card", className)}>
       {title && (
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
           <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-foreground/80">{title}</h2>
           {meta && <div className="num text-[11px] text-muted-foreground">{meta}</div>}
         </div>
       )}
-      <div className="p-4">{children}</div>
+      <div className="min-w-0 p-4">{children}</div>
     </section>
   );
 }
@@ -105,9 +105,9 @@ export function EvidenceList({ evidence, testPrefix = "evidence" }: { evidence: 
   const [open, setOpen] = useState<number | null>(evidence.length ? 0 : null);
   if (!evidence.length) return <div className="text-xs text-muted-foreground"><Unknown>no source evidence</Unknown> This item is not backed by a file excerpt.</div>;
   return (
-    <ul className="space-y-1.5">
+    <ul className="min-w-0 max-w-full space-y-1.5">
       {evidence.map((ev, i) => (
-        <li key={`${ev.path}:${ev.line_start}:${i}`} className="overflow-hidden rounded-sm border border-border">
+        <li key={`${ev.path}:${ev.line_start}:${i}`} className="min-w-0 max-w-full overflow-hidden rounded-sm border border-border">
           <button
             type="button"
             onClick={() => setOpen(open === i ? null : i)}
@@ -122,7 +122,7 @@ export function EvidenceList({ evidence, testPrefix = "evidence" }: { evidence: 
           </button>
           {open === i && (
             <div className="bg-[hsl(215_36%_11%)] text-[hsl(40_25%_88%)]">
-              <pre className="num overflow-x-auto px-0 py-2 text-[11.5px] leading-5">
+              <pre className="num max-w-full overflow-x-auto px-0 py-2 text-[11.5px] leading-5">
                 {ev.excerpt.split("\n").map((line, j) => (
                   <div key={j} className="flex"><span className="w-12 shrink-0 select-none pr-3 text-right text-[hsl(215_14%_50%)]">{ev.line_start + j}</span><span className="pr-3">{line || " "}</span></div>
                 ))}
@@ -140,7 +140,7 @@ export function KV({ k, children }: { k: string; children: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-dashed border-border py-1.5 text-sm last:border-0">
       <dt className="text-muted-foreground">{k}</dt>
-      <dd className="text-right">{children}</dd>
+      <dd className="min-w-0 break-words text-right">{children}</dd>
     </div>
   );
 }

@@ -61,6 +61,25 @@ def test_archive_and_invalid_requests(client):
     assert client.post("/api/v1/analyses/archive", files={"file": ("x.zip", b"bad")}).status_code == 422
 
 
+def test_review_refreshes_findings_but_preserves_old_run(client):
+    a = create(client)
+    policy = next(p for p in a["policies"] if p["symbol"] == "call_order")
+    before = client.post(f"/api/v1/analyses/{a['id']}/simulations",
+                         json={"mode": "healthy", "requests": 2}).json()
+    for attempts in (2, 4):
+        response = client.patch(f"/api/v1/analyses/{a['id']}/policies/{policy['id']}",
+                                json={"max_total_attempts": attempts, "note": "Verified reviewer correction"})
+        assert response.status_code == 200
+        report = client.get(f"/api/v1/analyses/{a['id']}/report").json()
+        details = [f["detail"] for f in report["analysis"]["findings"]
+                   if f["title"] == "Multiple attempts configured" and "call_order " in f["detail"]]
+        assert not details if attempts == 2 else "4 total attempts" in details[0]
+        saved = next(p for p in report["analysis"]["policies"] if p["id"] == policy["id"])
+        assert saved["source_value"] == 3
+    previous = client.get(f"/api/v1/simulations/{before['id']}").json()
+    assert next(p for p in previous["policies"] if p["id"] == policy["id"])["max_total_attempts"] == 3
+
+
 def test_finite_inputs_and_limits(client):
     a = create(client)
     assert client.post(f"/api/v1/analyses/{a['id']}/simulations",
