@@ -4,6 +4,7 @@ import zipfile
 from fastapi.testclient import TestClient
 
 from cascadegraph_runtime.app import app
+from cascadegraph_runtime.security import MAX_BODY
 
 
 def create(client):
@@ -86,7 +87,7 @@ def test_finite_inputs_and_limits(client):
                        json={"requests": 501}).status_code == 422
     assert client.post(f"/api/v1/analyses/{a['id']}/simulations",
                        content='{"arrival_rate":NaN}', headers={"Content-Type": "application/json"}).status_code == 422
-    assert client.post("/api/v1/analyses", content=b"x" * (6 * 1024 * 1024)).status_code == 413
+    assert client.post("/api/v1/analyses", content=b"", headers={"Content-Length": str(MAX_BODY + 1)}).status_code == 413
 
 
 def test_status_and_cookie(client):

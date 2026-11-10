@@ -17,8 +17,32 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from . import store
 from .ai import ai_available
 from .analysis import analyze, refresh_policy_findings, utcnow
-from .models import MODEL_VERSION, Analysis, AnalysisInput, EdgeConfirmation, PolicyConfirmation, Scenario
-from .security import MAX_ARCHIVE, MAX_FILES, ROOT, InputError, ingest_zip, redact, sample_files
+from .models import (
+    MODEL_VERSION,
+    Analysis,
+    AnalysisInput,
+    EdgeConfirmation,
+    PolicyConfirmation,
+    RepositoryInput,
+    Scenario,
+)
+from .repository import fetch_repository
+from .security import (
+    MAX_ARCHIVE,
+    MAX_BODY,
+    MAX_EXPANDED,
+    MAX_FILE,
+    MAX_FILES,
+    MAX_SOURCE,
+    ROOT,
+    InputError,
+    ingest_zip,
+    redact,
+    sample_files,
+    select_project,
+    validate_source_path,
+    validate_sources,
+)
 from .simulation import simulate
 
 logger = logging.getLogger("cascadegraph")
@@ -26,7 +50,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 LIMITATIONS = [
     "Supports bounded Python Tenacity/urllib3, Istio VirtualService and Compose syntax only.",
     "Custom-loop AI support is restricted to the bundled range-loop pattern and requires explicit opt-in.",
-    "No arbitrary URL fetching or private repository ingestion. Use a bounded ZIP archive.",
+    "Public GitHub root URLs only; no arbitrary hosts, redirect following or private GitHub credentials. Private source must be uploaded.",
     "SQLite demo storage may reset on republish; export reports. Analyses expire after 24 hours.",
     "The simulator supports acyclic call paths and sequential fan-out, not arbitrary production behavior.",
     "Measured validation describes only the committed sample and matching CI scenarios, never an uploaded application.",
@@ -50,16 +74,9 @@ class SafetyMiddleware(BaseHTTPMiddleware):
             length = int(request.headers.get("content-length", "0"))
         except ValueError:
             return JSONResponse({"error": "Invalid Content-Length"}, 400)
-        if length < 0 or length > MAX_ARCHIVE + 65536:
-            return JSONResponse({"error": "Upload exceeds 5 MiB", "code": "INPUT_TOO_LARGE"}, 413)
-        # Read with a hard limit, including chunked requests, before multipart parsing.
-        if mutating:
-            body = bytearray()
-            async for chunk in request.stream():
-                body.extend(chunk)
-                if len(body) > MAX_ARCHIVE + 65536:
-                    return JSONResponse({"error": "Request body exceeds limit"}, 413)
-            request._body = bytes(body)
+        body_limit = MAX_BODY if request.url.path in {"/api/v1/analyses/archive", "/api/v1/analyses/sources"} else 65536
+        if length < 0 or length > body_limit:
+            return JSONResponse({"error": "Request exceeds its input limit; ZIP/source uploads allow 50 MiB plus multipart overhead", "code": "INPUT_TOO_LARGE"}, 413)
         peer = request.client.host if request.client else "unknown"
         now = time.monotonic()
         reads = self.rates["all:" + peer]
@@ -93,10 +110,30 @@ class SafetyMiddleware(BaseHTTPMiddleware):
                 self.rates = defaultdict(deque, {k: v for k, v in self.rates.items() if v and v[-1] > now - 60})
         try:
             if mutating:
-                async with self.semaphore:
+                try:
+                    await asyncio.wait_for(self.semaphore.acquire(), timeout=2)
+                except TimeoutError:
+                    raise HTTPException(429, detail="Analysis capacity is busy; retry shortly") from None
+                try:
+                    # Hold admission while buffering/parsing, not only during analysis.
+                    async def read_body():
+                        body = bytearray()
+                        async for chunk in request.stream():
+                            body.extend(chunk)
+                            if len(body) > body_limit:
+                                raise HTTPException(413, detail="Request body exceeds the upload limit")
+                        request._body = bytes(body)
+                    try:
+                        await asyncio.wait_for(read_body(), timeout=30)
+                    except TimeoutError:
+                        raise HTTPException(408, detail="Upload timed out; retry with the relevant source files") from None
                     response = await call_next(request)
+                finally:
+                    self.semaphore.release()
             else:
                 response = await call_next(request)
+        except HTTPException as exc:
+            response = JSONResponse({"error": exc.detail}, exc.status_code)
         except Exception:
             logger.error(json.dumps({"correlation_id": correlation, "event": "unexpected_error"}))
             response = JSONResponse({"error": "Operation failed; retry or inspect the supported input format.", "code": "INTERNAL_ERROR", "correlation_id": correlation}, 500)
@@ -155,7 +192,9 @@ def system_status():
                 ai_provider=os.getenv("LLM_PROVIDER", "replit_openai"),
                 storage="SQLite · session-owned · 24-hour retention · ephemeral demo",
                 supported_parsers=["Docker Compose", "Tenacity", "urllib3 / requests", "Istio VirtualService", "Sample custom loop (opt-in AI)"],
-                limitations=LIMITATIONS, max_archive_mb=5, max_files=MAX_FILES)
+                limitations=LIMITATIONS, max_archive_mb=MAX_ARCHIVE // (1024 * 1024), max_files=MAX_FILES,
+                max_expanded_mb=MAX_EXPANDED // (1024 * 1024), max_source_mb=MAX_SOURCE // (1024 * 1024),
+                max_file_kb=MAX_FILE // 1024, max_source_files=100)
 
 
 @app.get("/api/v1/analyses", operation_id="listAnalyses")
@@ -175,17 +214,77 @@ async def create_run(data: AnalysisInput, request: Request):
 
 
 @app.post("/api/v1/analyses/archive", status_code=201, operation_id="uploadArchive")
-async def upload(request: Request, file: UploadFile = File(...), use_ai: bool = Form(False)):
+async def upload(request: Request, file: UploadFile = File(...), use_ai: bool = Form(False), project_path: str = Form(".", max_length=200)):
     try:
         raw = await file.read(MAX_ARCHIVE + 1)
         files = ingest_zip(raw)
-        result = await asyncio.wait_for(analyze(files, "Uploaded repository", "archive", use_ai), 90)
-        store.save_analysis(request.state.owner, result.model_dump())
+        result = await analyze_submission(request, files, "Uploaded repository", "archive", use_ai, project_path)
         return result
     except ValueError as exc:
         raise InputError(str(exc)) from exc
     finally:
         await file.close()
+
+
+async def analyze_submission(request, files, name, source_type, use_ai, project_path=".", repository=None):
+    files = select_project(validate_sources(files), project_path)
+    try:
+        result = await asyncio.wait_for(analyze(files, name, source_type, use_ai), 90)
+    except TimeoutError:
+        raise InputError("Analysis exceeded its time budget. Select a smaller project folder or upload relevant source files") from None
+    result.repository = repository
+    if repository:
+        repository.project_path = project_path.strip() or "."
+        result.assumptions.append(f"Public GitHub snapshot pinned to commit {repository.commit_sha}; no repository code was executed.")
+        if repository.supplemented_paths:
+            result.assumptions.append("User-uploaded source supplements/overrides repository paths; those excerpts are not claimed to originate from the pinned commit.")
+    try:
+        store.save_analysis(request.state.owner, result.model_dump())
+    except ValueError as exc:
+        raise InputError(str(exc)) from exc
+    return result
+
+
+@app.post("/api/v1/analyses/repository", status_code=201, operation_id="analyzeRepository")
+async def repository_analysis(data: RepositoryInput, request: Request):
+    files, repository = await fetch_repository(data.repository_url, data.ref)
+    return await analyze_submission(request, files, repository.repository_url, "github", data.use_ai,
+                                    data.project_path, repository)
+
+
+@app.post("/api/v1/analyses/sources", status_code=201, operation_id="analyzeSources")
+async def source_analysis(
+    request: Request, files: list[UploadFile] = File(...), paths: list[str] | None = Form(None),
+    repository_url: str = Form("", max_length=300), ref: str = Form("", max_length=200),
+    project_path: str = Form(".", max_length=200), use_ai: bool = Form(False),
+):
+    try:
+        if not 1 <= len(files) <= 100 or paths is not None and len(paths) != len(files):
+            raise InputError("Provide 1–100 source files with one relative path per file")
+        source = {}
+        for index, file in enumerate(files):
+            path = validate_source_path(paths[index] if paths is not None else file.filename or "")
+            if path in source:
+                raise InputError("Duplicate uploaded source path")
+            raw = await file.read(MAX_FILE + 1)
+            if len(raw) > MAX_FILE:
+                raise InputError("A supported source file exceeds 512 KiB")
+            try:
+                source[path] = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                raise InputError("Source files must be UTF-8 text") from None
+        validate_sources(source)
+        repository = None
+        if repository_url.strip():
+            base, repository = await fetch_repository(repository_url, ref)
+            repository.supplemented_paths = sorted(source)
+            base.update(source)
+            source = base
+        return await analyze_submission(request, source, "Uploaded source files" if not repository else repository.repository_url,
+                                        "source_files" if not repository else "github_with_sources", use_ai, project_path, repository)
+    finally:
+        for file in files:
+            await file.close()
 
 
 @app.get("/api/v1/analyses/{analysisId}", operation_id="getAnalysis")

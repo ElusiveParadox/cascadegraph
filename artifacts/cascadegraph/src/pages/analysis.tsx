@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SourceNeeds } from "@/components/source-needs";
 import { Link, useParams } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, FlaskConical, SlidersHorizontal } from "lucide-react";
@@ -77,6 +78,7 @@ function AnalysisView({ analysis }: { analysis: Analysis }) {
         </>}>
         <span className="num text-xs">fingerprint {analysis.fingerprint.slice(0, 16)} · created {fmtDate(analysis.created_at)} · expires {fmtDate(analysis.expires_at)}</span>
       </PageHeader>
+      <SourceNeeds analysis={analysis} />
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border md:grid-cols-5">
         {[["status", <Tag key="s" tone={severityTone(analysis.status)}>{analysis.status}</Tag>], ["files", analysis.file_count], ["services", analysis.nodes.length], ["edges", analysis.edges.length], ["policies", `${analysis.policies.length}${unresolved ? ` · ${unresolved} unresolved` : ""}`]].map(([k, v]) => (
           <div key={k as string} className="bg-card px-4 py-3"><div className="num text-[10.5px] uppercase tracking-wider text-muted-foreground">{k as string}</div><div className="num mt-1 text-lg font-semibold" data-testid={`text-stat-${k}`}>{v}</div></div>

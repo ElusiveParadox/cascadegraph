@@ -1,6 +1,7 @@
 """Orchestration of bounded parsers and provenance-preserving graph binding."""
 
 import ast
+import posixpath
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -71,7 +72,15 @@ async def analyze(files: dict[str, str], name: str, source_type: str, use_ai=Fal
                 a.nodes.append(ServiceNode(id=key, name=key, startup_dependencies=list(dep),
                     evidence=[yaml_service_evidence(compose_source, files[compose_source], key)]))
                 build = service.get("build", key)
-                contexts[key] = (build.get("context", key) if isinstance(build, dict) else str(build)).removeprefix("./").rstrip("/")
+                relative = build.get("context", key) if isinstance(build, dict) else str(build)
+                if not isinstance(relative, str) or "://" in relative or relative.startswith("/"):
+                    add_finding(a, "Unsupported build context", f"{key}: provide local source files for this service")
+                    continue
+                context = posixpath.normpath(str(PurePosixPath(compose_source).parent / relative))
+                if context == ".." or context.startswith("../"):
+                    add_finding(a, "Unsupported build context", f"{key}: build context escapes the submitted project")
+                    continue
+                contexts[key] = context
         except InputError as exc:
             add_finding(a, "Compose could not be parsed", str(exc), "error")
     else:
@@ -87,7 +96,7 @@ async def analyze(files: dict[str, str], name: str, source_type: str, use_ai=Fal
                 if custom:
                     parsed.append(custom)
                 for p in parsed:
-                    matches = [key for key, context in contexts.items() if path.startswith(context + "/")]
+                    matches = [key for key, context in contexts.items() if context == "." or path.startswith(context + "/")]
                     p.service_id = matches[0] if len(matches) == 1 else None
                 a.policies.extend(parsed)
             elif path.endswith((".yml", ".yaml")) and path not in compose_paths and PurePosixPath(path).name != "cascadegraph.yaml":
@@ -167,4 +176,14 @@ async def analyze(files: dict[str, str], name: str, source_type: str, use_ai=Fal
     a.stages.extend(["Original retry semantics normalized", "Evidence-labelled graph assembled"])
     a.service_count, a.policy_count = len(a.nodes), len(a.policies)
     refresh_policy_findings(a)
+    if len(compose_paths) != 1 or not a.nodes:
+        a.requested_files.append("Provide one compose.yaml/docker-compose.yml defining the services, or select its project folder.")
+    if a.nodes and not a.edges:
+        a.requested_files.append("Provide cascadegraph.yaml with explicit service-to-service edges and policy_symbols, or supported client endpoint references.")
+    if not a.policies:
+        a.requested_files.append("Provide the Python retry/client source files or Istio VirtualService YAML containing the actual retry policy.")
+    if any(p.service_id is None for p in a.policies) and not any(p.edge_id for p in a.policies):
+        a.requested_files.append("Provide source files under the service build-context paths declared by Compose so policies can be attributed.")
+    if any(f.title == "Unresolved policy binding" for f in a.findings):
+        a.requested_files.append("Provide the named retry functions/configurations at their service-relative paths, or correct cascadegraph.yaml policy_symbols.")
     return a

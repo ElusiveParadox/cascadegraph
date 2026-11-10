@@ -33,8 +33,10 @@ import type {
   HealthStatus,
   PolicyConfirmation,
   Report,
+  RepositoryInput,
   Scenario,
   Simulation,
+  SourceInput,
   SystemStatus,
   ValidationStatus
 } from './api.schemas';
@@ -444,6 +446,9 @@ formData.append(`file`, archiveInput.file);
 if(archiveInput.use_ai !== undefined) {
  formData.append(`use_ai`, archiveInput.use_ai.toString())
  }
+if(archiveInput.project_path !== undefined) {
+ formData.append(`project_path`, archiveInput.project_path);
+ }
 
   return customFetch<Analysis>(getUploadArchiveUrl(),
   {
@@ -501,6 +506,173 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUploadArchiveMutationOptions(options), queryClient);
+    }
+
+export const getAnalyzeRepositoryUrl = () => {
+
+
+
+
+  return `/api/v1/analyses/repository`
+}
+
+export const analyzeRepository = async (repositoryInput: RepositoryInput, options?: Parameters<typeof customFetch>[1]): Promise<Analysis> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Analysis>(getAnalyzeRepositoryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(repositoryInput)
+  }
+);}
+
+
+
+
+
+export const getAnalyzeRepositoryMutationKey = () => ['analyzeRepository'] as const;
+
+export const getAnalyzeRepositoryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeRepository>>, TError,AnalyzeRepositoryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof analyzeRepository>>, TError,AnalyzeRepositoryMutationVariables, TContext> => {
+
+const mutationKey = getAnalyzeRepositoryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzeRepository>>, AnalyzeRepositoryMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  analyzeRepository(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnalyzeRepositoryMutationResult = NonNullable<Awaited<ReturnType<typeof analyzeRepository>>>
+    export type AnalyzeRepositoryMutationBody = BodyType<RepositoryInput>
+    export type AnalyzeRepositoryMutationError = ErrorType<unknown>
+    export type AnalyzeRepositoryMutationVariables = {data: BodyType<RepositoryInput>}
+
+    export const useAnalyzeRepository = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeRepository>>, TError,AnalyzeRepositoryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof analyzeRepository>>,
+        TError,
+        AnalyzeRepositoryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAnalyzeRepositoryMutationOptions(options), queryClient);
+    }
+
+export const getAnalyzeSourcesUrl = () => {
+
+
+
+
+  return `/api/v1/analyses/sources`
+}
+
+export const analyzeSources = async (sourceInput: SourceInput, options?: Parameters<typeof customFetch>[1]): Promise<Analysis> => {
+    const formData = new FormData();
+sourceInput.files.forEach(value => formData.append(`files`, value));
+if(sourceInput.paths !== undefined) {
+ sourceInput.paths.forEach(value => formData.append(`paths`, value));
+ }
+if(sourceInput.repository_url !== undefined) {
+ formData.append(`repository_url`, sourceInput.repository_url);
+ }
+if(sourceInput.ref !== undefined) {
+ formData.append(`ref`, sourceInput.ref);
+ }
+if(sourceInput.project_path !== undefined) {
+ formData.append(`project_path`, sourceInput.project_path);
+ }
+if(sourceInput.use_ai !== undefined) {
+ formData.append(`use_ai`, sourceInput.use_ai.toString())
+ }
+
+  return customFetch<Analysis>(getAnalyzeSourcesUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getAnalyzeSourcesMutationKey = () => ['analyzeSources'] as const;
+
+export const getAnalyzeSourcesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeSources>>, TError,AnalyzeSourcesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof analyzeSources>>, TError,AnalyzeSourcesMutationVariables, TContext> => {
+
+const mutationKey = getAnalyzeSourcesMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzeSources>>, AnalyzeSourcesMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  analyzeSources(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnalyzeSourcesMutationResult = NonNullable<Awaited<ReturnType<typeof analyzeSources>>>
+    export type AnalyzeSourcesMutationBody = BodyType<SourceInput>
+    export type AnalyzeSourcesMutationError = ErrorType<unknown>
+    export type AnalyzeSourcesMutationVariables = {data: BodyType<SourceInput>}
+
+    export const useAnalyzeSources = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeSources>>, TError,AnalyzeSourcesMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof analyzeSources>>,
+        TError,
+        AnalyzeSourcesMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAnalyzeSourcesMutationOptions(options), queryClient);
     }
 
 export const getGetAnalysisUrl = (analysisId: string,) => {

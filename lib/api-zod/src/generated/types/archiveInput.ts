@@ -9,4 +9,6 @@
 export interface ArchiveInput {
   file: Blob | File;
   use_ai?: boolean;
+  /** @maxLength 200 */
+  project_path?: string;
 }

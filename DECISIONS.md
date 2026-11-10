@@ -49,3 +49,25 @@ catalog to its patched 4.x release with matching generation syntax. The generate
 code is the only authoritative TS validation layer; Python remains the actual
 API runtime. This addresses inherited high-severity advisories rather than
 introducing a new validation library.
+
+## ADR-009 — Public repository URLs and source fallback (2026-11-10)
+Accepted. Add read-only public GitHub snapshot import and direct source uploads.
+Alternatives were using the creator's connected OAuth credentials, cloning and
+running repositories, or accepting arbitrary download URLs; all are rejected.
+Public app users must not inherit access to the creator's private repositories.
+Construct fixed GitHub API/codeload URLs, resolve an immutable commit using the
+SHA media type, prohibit redirects/non-public destinations, and bound all reads.
+Retain only normalized results, minimal redacted evidence and provenance—not raw
+source. Missing/ambiguous files produce explicit requests; supplementation creates
+a new analysis and identifies user-overridden paths separately from GitHub source.
+Private OAuth access remains a later, per-user authorization feature.
+
+## ADR-010 — Larger archives without unbounded source parsing (2026-11-10)
+Accepted in response to the user's request for larger uploads. Raise compressed
+ZIP/download size from 5 to 50 MiB, declared expansion to 200 MiB, entry count to
+2,000 and supported per-file size to 512 KiB. Retained supported source remains
+bounded at 20 MiB; direct uploads at 100 files. Large ignored/binary assets are
+skipped before per-source checks but still count toward declared archive limits.
+Acquire two-slot admission before buffering, bound waiting and upload reads, and
+keep small JSON routes at 64 KiB. This trades general large-repository coverage
+for predictable demo resource use; large/private applications can supply a subset.

@@ -10,10 +10,12 @@ from pathlib import Path, PurePosixPath
 import yaml
 from yaml.tokens import AliasToken
 
-MAX_ARCHIVE = 5 * 1024 * 1024
-MAX_EXPANDED = 12 * 1024 * 1024
-MAX_FILE = 128 * 1024
-MAX_FILES = 500
+MAX_ARCHIVE = 50 * 1024 * 1024
+MAX_EXPANDED = 200 * 1024 * 1024
+MAX_SOURCE = 20 * 1024 * 1024
+MAX_FILE = 512 * 1024
+MAX_FILES = 2000
+MAX_BODY = MAX_ARCHIVE + 2 * 1024 * 1024
 ROOT = Path(__file__).resolve().parents[2]
 IGNORED = {".git", ".env", ".venv", "venv", "node_modules", "dist", "build", "__pycache__", ".github"}
 SOURCE_SUFFIXES = {".py", ".yaml", ".yml", ".toml", ".txt"}
@@ -21,6 +23,54 @@ SOURCE_SUFFIXES = {".py", ".yaml", ".yml", ".toml", ".txt"}
 
 class InputError(ValueError):
     pass
+
+
+def validate_source_path(name: str) -> str:
+    path = PurePosixPath(name)
+    if (
+        not name or len(name) > 300 or path.is_absolute() or ".." in path.parts
+        or "\\" in name or ":" in name or len(path.parts) > 16
+        or any(ord(c) < 32 for c in name) or str(path) in {".", ""}
+    ):
+        raise InputError("Source paths must be bounded repository-relative paths")
+    return str(path)
+
+
+def supported_source(path: str) -> bool:
+    value = PurePosixPath(path)
+    return (
+        not any(p in IGNORED or p.startswith(".env") for p in value.parts)
+        and value.suffix.lower() in SOURCE_SUFFIXES
+    )
+
+
+def validate_sources(files: dict[str, str]) -> dict[str, str]:
+    if not files or len(files) > MAX_FILES:
+        raise InputError(f"Provide 1–{MAX_FILES} supported source files")
+    total = 0
+    for path, text in files.items():
+        validate_source_path(path)
+        if not supported_source(path):
+            raise InputError("Only supported source/configuration files are accepted; secret/dependency paths are excluded")
+        size = len(text.encode("utf-8"))
+        if size > MAX_FILE:
+            raise InputError("A supported source file exceeds 512 KiB")
+        if "\0" in text:
+            raise InputError("Binary source files are unsupported")
+        total += size
+        if total > MAX_SOURCE:
+            raise InputError("Retained supported source exceeds 20 MiB")
+    return files
+
+
+def select_project(files: dict[str, str], project_path: str = ".") -> dict[str, str]:
+    if project_path.strip() in {"", "."}:
+        return files
+    prefix = validate_source_path(project_path.strip().rstrip("/")) + "/"
+    selected = {path[len(prefix):]: text for path, text in files.items() if path.startswith(prefix)}
+    if not selected:
+        raise InputError("Project folder contains no supported source files; check its repository-relative path")
+    return selected
 
 
 def redact(text: str) -> str:
@@ -77,42 +127,49 @@ def safe_yaml(text: str):
 
 def ingest_zip(data: bytes) -> dict[str, str]:
     if len(data) > MAX_ARCHIVE:
-        raise InputError("Archive exceeds 5 MiB")
+        raise InputError("Archive exceeds 50 MiB")
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             infos = archive.infolist()
             if len(infos) > MAX_FILES:
-                raise InputError("Archive exceeds 500 entries")
+                raise InputError(f"Archive exceeds {MAX_FILES} entries")
             total = 0
+            source_bytes = 0
             files = {}
+            seen = set()
             for info in infos:
                 path = PurePosixPath(info.filename)
                 if (
                     path.is_absolute() or ".." in path.parts or "\\" in info.filename
-                    or ":" in info.filename or len(path.parts) > 12
+                    or ":" in info.filename or len(path.parts) > 16 or len(info.filename) > 300
                     or any(ord(c) < 32 for c in info.filename)
                     or stat.S_ISLNK(info.external_attr >> 16)
                     or info.flag_bits & 1
                 ):
                     raise InputError("Archive contains unsafe paths, links or encrypted entries")
+                if str(path) in seen:
+                    raise InputError("Duplicate archive path")
+                seen.add(str(path))
                 total += info.file_size
                 if total > MAX_EXPANDED:
-                    raise InputError("Expanded archive exceeds 12 MiB")
-                if info.file_size > MAX_FILE:
-                    raise InputError("Archive entry exceeds 128 KiB")
-                if info.file_size > max(1, info.compress_size) * 100:
-                    raise InputError("Archive compression ratio exceeds the safety limit")
+                    raise InputError("Expanded archive exceeds 200 MiB")
                 if info.is_dir() or any(p in IGNORED or p.startswith(".env") for p in path.parts):
                     continue
                 if path.suffix.lower() not in SOURCE_SUFFIXES:
                     continue
-                if str(path) in files:
-                    raise InputError("Duplicate archive path")
+                if info.file_size > MAX_FILE:
+                    raise InputError("A supported source file exceeds 512 KiB")
+                if info.file_size > max(1, info.compress_size) * 100:
+                    raise InputError("Archive compression ratio exceeds the safety limit")
                 try:
                     raw = archive.read(info)
                     if b"\0" in raw:
                         continue
-                    files[str(path)] = raw.decode("utf-8")
+                    text = raw.decode("utf-8")
+                    source_bytes += len(raw)
+                    if source_bytes > MAX_SOURCE:
+                        raise InputError("Retained supported source exceeds 20 MiB")
+                    files[str(path)] = text
                 except UnicodeDecodeError:
                     continue
             if not files:
@@ -121,7 +178,7 @@ def ingest_zip(data: bytes) -> dict[str, str]:
             roots = {p.split("/")[0] for p in files}
             if len(roots) == 1 and all("/" in p for p in files):
                 files = {p.split("/", 1)[1]: s for p, s in files.items()}
-            return files
+            return validate_sources(files)
     except (zipfile.BadZipFile, RuntimeError, OSError) as exc:
         raise InputError("Invalid ZIP archive") from exc
 

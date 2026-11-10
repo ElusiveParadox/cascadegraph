@@ -75,6 +75,14 @@ class Finding(StrictModel):
     detail: str
 
 
+class RepositorySource(StrictModel):
+    repository_url: str
+    commit_sha: str
+    ref: str
+    project_path: str = "."
+    supplemented_paths: list[str] = Field(default_factory=list)
+
+
 class Analysis(StrictModel):
     id: str
     name: str
@@ -86,6 +94,8 @@ class Analysis(StrictModel):
     service_count: int = 0
     policy_count: int = 0
     fingerprint: str
+    repository: RepositorySource | None = None
+    requested_files: list[str] = Field(default_factory=list)
     nodes: list[ServiceNode] = Field(default_factory=list)
     edges: list[DependencyEdge] = Field(default_factory=list)
     policies: list[Policy] = Field(default_factory=list)
@@ -96,6 +106,13 @@ class Analysis(StrictModel):
 
 class AnalysisInput(StrictModel):
     source_type: Literal["sample"]
+    use_ai: bool = False
+
+
+class RepositoryInput(StrictModel):
+    repository_url: str = Field(min_length=10, max_length=300)
+    ref: str = Field(default="", max_length=200)
+    project_path: str = Field(default=".", max_length=200)
     use_ai: bool = False
 
 

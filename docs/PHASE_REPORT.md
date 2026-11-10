@@ -30,6 +30,9 @@ Public publication requires user approval. Actual feedback from three to five
 developers is outstanding; no user interviews or feedback were manufactured.
 
 ## Readiness
-Ready for a bounded demo only after the phone regression/required checks pass.
+Ready for a bounded demo: final desktop and phone Playwright journeys passed,
+including overflow, actual downloaded JSON and corrected-finding checks; all nine
+required GitHub checks passed. The implementation was squash-merged as
+`0b326d6e193311c1c5678be7e748bfca7edac5f7`. No failure was waived or admin bypass used.
 Private durable multi-user use and broader real-system calibration are separate
 requirements, not silent promises of this implementation.
