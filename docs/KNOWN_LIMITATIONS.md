@@ -6,6 +6,11 @@
 - Complex dynamic Python expressions, unbounded stops, tuple timeouts, arbitrary
   custom retry predicates, unsupported mesh defaults and opaque helpers remain
   unresolved. Backoff/condition/count unknowns block bound-policy simulation.
+- Public GitHub root URLs, ZIPs and supported individual source files are accepted.
+  Private GitHub credential access is not enabled; upload the relevant files/ZIP.
+  Downloads are pinned to a commit and never follow redirects or execute source.
+  Large repositories can exceed the whole-snapshot download/entry limits even
+  when a small project folder is selected; upload a relevant subset instead.
 - General HTTP call inference, Kubernetes support and trace import are excluded.
   Startup dependencies and shared networks never become request edges.
 - Custom AI extraction supports the bundled `custom_retry_request` pattern, not

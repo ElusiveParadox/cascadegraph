@@ -9,14 +9,17 @@ import type { AnalysisSummary } from './analysisSummary';
 import type { DependencyEdge } from './dependencyEdge';
 import type { Finding } from './finding';
 import type { Policy } from './policy';
+import type { RepositorySource } from './repositorySource';
 import type { ServiceNode } from './serviceNode';
 
-export type Analysis = AnalysisSummary & {
+export type Analysis = AnalysisSummary & ({
   fingerprint: string;
+  repository?: RepositorySource | null;
+  requested_files?: string[];
   nodes: ServiceNode[];
   edges: DependencyEdge[];
   policies: Policy[];
   findings: Finding[];
   stages: string[];
   assumptions: string[];
-};
+});

@@ -11,7 +11,7 @@ export function PageHeader({ kicker, title, children, actions }: { kicker: strin
     <header className="rise flex flex-col gap-4 border-b border-border pb-5 md:flex-row md:items-end md:justify-between">
       <div className="min-w-0">
         <div className="num text-[11px] uppercase tracking-[0.18em] text-primary">{kicker}</div>
-        <h1 className="font-display mt-1 text-2xl font-bold md:text-3xl" data-testid="text-page-title">{title}</h1>
+        <h1 className="font-display mt-1 [overflow-wrap:anywhere] text-2xl font-bold md:text-3xl" data-testid="text-page-title">{title}</h1>
         {children && <div className="mt-2 max-w-3xl text-sm text-muted-foreground">{children}</div>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}

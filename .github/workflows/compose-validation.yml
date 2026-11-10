@@ -2,7 +2,7 @@ name: Real Compose validation
 on:
   workflow_dispatch:
   push:
-    branches: [main, "feat/cascadegraph-mvp"]
+    branches: [main, "feat/**"]
 permissions:
   contents: read
 jobs:

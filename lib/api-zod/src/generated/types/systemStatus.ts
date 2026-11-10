@@ -16,4 +16,8 @@ export interface SystemStatus {
   limitations: string[];
   max_archive_mb: number;
   max_files: number;
+  max_expanded_mb?: number;
+  max_source_mb?: number;
+  max_file_kb?: number;
+  max_source_files?: number;
 }

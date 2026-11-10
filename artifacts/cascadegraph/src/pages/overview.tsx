@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Archive, ArrowRight, Box, Trash2, Upload } from "lucide-react";
 import {
@@ -7,6 +7,8 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { SourceIntake } from "@/components/source-intake";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
@@ -35,11 +37,14 @@ function AiOptIn({ id, checked, onChange, available }: { id: string; checked: bo
 export default function Overview() {
   const qc = useQueryClient();
   const [, nav] = useLocation();
+  const parameters = new URLSearchParams(useSearch());
   const { toast } = useToast();
   const status = useGetSystemStatus();
   const list = useListAnalyses();
   const [sampleAi, setSampleAi] = useState(false);
   const [zipAi, setZipAi] = useState(false);
+  const [zipProject, setZipProject] = useState(".");
+  const [importBusy, setImportBusy] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -61,7 +66,9 @@ export default function Overview() {
       onError: (e) => toast({ title: "Delete failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" }),
     },
   });
-  const busy = create.isPending || upload.isPending;
+  // Settle both initial cookie-setting reads before creating session-owned data.
+  const ready = list.isSuccess && status.isSuccess;
+  const busy = create.isPending || upload.isPending || importBusy || !ready;
   const maxMb = status.data?.max_archive_mb;
   const tooBig = !!(file && maxMb && file.size > maxMb * 1024 * 1024);
 
@@ -71,15 +78,21 @@ export default function Overview() {
         Point CascadeGraph at service source. It extracts retry policies with file and line evidence, builds the call graph, and replays seeded failure scenarios so you can compare a baseline against a candidate policy.
       </PageHeader>
 
-      {busy && (
+      {(create.isPending || upload.isPending || importBusy) && (
         <div className="rise relative overflow-hidden rounded-md border border-primary/40 bg-primary/5 p-4" role="status" data-testid="status-processing">
-          <div className="text-sm font-semibold">Analyzing {create.isPending ? "bundled sample" : file?.name}</div>
+          <div className="text-sm font-semibold">Analyzing {create.isPending ? "bundled sample" : importBusy ? "repository / source files" : file?.name}</div>
           <div className="mt-0.5 text-xs text-muted-foreground">Parsing runs synchronously within a bounded file and size budget. The result appears when the request returns; there is no partial progress to report.</div>
           <div className="mt-3 h-[3px] overflow-hidden rounded bg-primary/15"><div className="scanbar h-full w-1/3 bg-primary" /></div>
         </div>
       )}
       {create.isError && <ErrorPanel error={create.error} title="Sample analysis failed" />}
       {upload.isError && <ErrorPanel error={upload.error} title="Archive analysis failed" />}
+      {!ready && (status.isError || list.isError
+        ? <ErrorPanel error={status.error ?? list.error} title="Workspace could not be initialized" onRetry={() => { status.refetch(); list.refetch(); }} />
+        : <p role="status" className="text-xs text-muted-foreground">Preparing browser session and server limits…</p>)}
+
+      <SourceIntake limits={status.data} disabled={create.isPending || upload.isPending || !ready} onBusyChange={setImportBusy} onAnalyzed={onCreated}
+        initialRepository={parameters.get("repository") ?? ""} initialRef={parameters.get("ref") ?? ""} initialProject={parameters.get("project") ?? "."} />
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
         <Panel title={<span className="flex items-center gap-2"><Box className="h-3.5 w-3.5" />Bundled sample</span>} meta="no upload">
@@ -99,12 +112,15 @@ export default function Overview() {
           <input ref={fileRef} type="file" accept=".zip,application/zip" className="hidden" data-testid="input-archive"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           {tooBig && <p className="mt-2 text-xs text-destructive">File exceeds the {maxMb} MB server limit.</p>}
+          <label className="mt-3 block text-xs font-medium">Project folder inside ZIP <span className="font-normal text-muted-foreground">optional</span>
+            <Input value={zipProject} maxLength={200} onChange={e => setZipProject(e.target.value)} placeholder="e.g. sample-app" className="num mt-1" data-testid="input-zip-project" />
+          </label>
           <div className="mt-3"><AiOptIn id="zip-ai" checked={zipAi} onChange={setZipAi} available={status.data?.ai_available} /></div>
           <Button className="mt-3" variant="secondary" disabled={!file || busy || tooBig} data-testid="button-upload-archive"
-            onClick={() => file && upload.mutate({ data: { file, use_ai: zipAi && !!status.data?.ai_available } })}>
+            onClick={() => file && upload.mutate({ data: { file, use_ai: zipAi && !!status.data?.ai_available, project_path: zipProject.trim() || "." } })}>
             Upload and analyze
           </Button>
-          <p className="mt-2 text-[11px] text-muted-foreground">Fetching from a repository URL is not supported yet.</p>
+          <p className="mt-2 text-[11px] text-muted-foreground">ZIPs may contain irrelevant binary assets; they are skipped without execution. Supported source, expansion and entry-count limits still apply.</p>
         </Panel>
       </div>
 

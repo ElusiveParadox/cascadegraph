@@ -1,10 +1,12 @@
 # CascadeGraph
 
 An evidence-backed, pre-deployment retry-policy analyzer for backend and platform
-engineers. Safely inspect a bundled sample or bounded repository ZIP, review
+engineers. Safely inspect a public GitHub URL, supported source files, bundled sample or bounded repository ZIP, review
 source-backed policies and call edges, then run deterministic what-if simulations.
 
 ## Working scope
+- Public GitHub URLs with pinned-commit provenance, ZIPs up to 50 MiB, and
+  supported individual source/configuration files with missing-file guidance.
 - Compose service definitions and explicit `cascadegraph.yaml` call topology.
 - Evidence-labelled supported environment/client references; startup ordering is
   never treated as proof of request traffic.
@@ -46,9 +48,12 @@ scenarios, compares counts and uploads JSON results. See
 proof of a successful run; actual evidence is recorded in PROGRESS.md.
 
 ## Security and limitations
-No uploaded source is executed. No Docker socket or privileged workload is used
+No uploaded or downloaded source is executed. Public imports use fixed GitHub
+hosts, reject redirects/non-public destinations, and never use the creator's
+connected account. No Docker socket or privileged workload is used
 in the Replit application. AI transmission is opt-in and redacted heuristically,
-not guaranteed secret-free. No public URL ingestion or private multi-user mode.
+not guaranteed secret-free. No arbitrary-host URL ingestion or private multi-user
+mode. Private repositories require an archive or source-file upload.
 
 SQLite is ephemeral demo storage with anonymous cookie ownership and 24-hour
 retention, not durable production storage. Export important reports. Model output

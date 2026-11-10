@@ -2,7 +2,7 @@ name: Quality checks
 on:
   pull_request:
   push:
-    branches: [main, "feat/**"]
+    branches: [main]
 permissions:
   contents: read
 jobs:

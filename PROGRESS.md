@@ -40,8 +40,45 @@
 - Browser CI includes desktop/phone Playwright checks. Final verdicts are recorded
   by the required workflow, not inferred from a workflow definition.
 
+## Final implementation gate
+- **52 Python tests** and both **desktop/phone Playwright journeys** passed.
+  Browser CI also checks actual downloaded report JSON, preserved source facts,
+  current findings after correction, mobile overflow and cancel/confirm deletion.
+- The stale-finding bug and mobile intrinsic-width overflow found during testing
+  were fixed and regression-covered. No browser failure was waived.
+- All nine required checks passed. The protected PR was squash-merged as
+  `0b326d6e193311c1c5678be7e748bfca7edac5f7`; no admin bypass or force push.
+- Final feature-commit quality run:
+  https://github.com/ElusiveParadox/cascadegraph/actions/runs/42807661059 .
+  Final feature-commit real experiment:
+  https://github.com/ElusiveParadox/cascadegraph/actions/runs/42807654826 .
+- Preview workflows restarted cleanly, readiness returned 200, and desktop/home
+  plus phone/validation screenshots rendered without application errors.
+
 ## Release gates not yet claimed
 - Replit **Preview** runs; production **Publish** requires the user's approval.
 - No production URL, durable private-team storage or real developer feedback is
   claimed. Three to five actual developer participants still need to be recruited.
 - See KNOWN_LIMITATIONS and VALIDATION_PROTOCOL for model and measurement limits.
+
+## Public repository and source-file intake — 2026-11-10
+- Increased ZIP/download cap to 50 MiB, archive expansion to 200 MiB and entries
+  to 2,000. Supported source is bounded at 20 MiB / 512 KiB per file; direct
+  uploads at 100 files. Admission happens before large-body buffering.
+- Added strict public GitHub URL ingestion, optional ref/project folder, immutable
+  commit provenance, and labelled source-file supplements. No arbitrary hosts,
+  redirects, creator credentials, raw-source persistence or code execution.
+- Added explicit missing-file guidance and resubmission; corrected Compose
+  build-context resolution relative to nested Compose files.
+- 86 Python tests, Ruff, frontend types and helper tests pass. A real URL-only
+  browser import produced the three-service/two-edge graph, persisted its exact
+  commit after reload, exported matching report provenance and deleted cleanly.
+  Policies/edges still require explicit human confirmation; ingestion is not
+  a claim of verified production safety.
+- Static security and privacy scans report no findings. Feature evidence:
+  https://github.com/ElusiveParadox/cascadegraph/pull/2
+- Protected CI requires Python checks, frontend types/helpers/build plus four
+  desktop/phone browser journeys, JavaScript audit, unsafe-execution guard and
+  real six-scenario Compose validation. The source journey deliberately delays
+  initial history loading to check ownership readiness. Delete-dialog content
+  has explicit precedence over its overlay; no forced-click test bypass is used.

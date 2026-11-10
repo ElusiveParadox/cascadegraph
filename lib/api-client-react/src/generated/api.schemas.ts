@@ -19,6 +19,10 @@ export interface SystemStatus {
   limitations: string[];
   max_archive_mb: number;
   max_files: number;
+  max_expanded_mb?: number;
+  max_source_mb?: number;
+  max_file_kb?: number;
+  max_source_files?: number;
 }
 
 export type AnalysisInputSourceType = typeof AnalysisInputSourceType[keyof typeof AnalysisInputSourceType];
@@ -36,6 +40,49 @@ export interface AnalysisInput {
 export interface ArchiveInput {
   file: Blob | File;
   use_ai?: boolean;
+  /** @maxLength 200 */
+  project_path?: string;
+}
+
+export interface RepositoryInput {
+  /**
+     * @minLength 10
+     * @maxLength 300
+     */
+  repository_url: string;
+  /** @maxLength 200 */
+  ref?: string;
+  /** @maxLength 200 */
+  project_path?: string;
+  use_ai?: boolean;
+}
+
+export interface SourceInput {
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  files: (Blob | File)[];
+  /**
+     * @maxItems 100
+     * @items.maxLength 300
+     */
+  paths?: string[];
+  /** @maxLength 300 */
+  repository_url?: string;
+  /** @maxLength 200 */
+  ref?: string;
+  /** @maxLength 200 */
+  project_path?: string;
+  use_ai?: boolean;
+}
+
+export interface RepositorySource {
+  repository_url: string;
+  commit_sha: string;
+  ref: string;
+  project_path: string;
+  supplemented_paths: string[];
 }
 
 export interface Evidence {
@@ -136,15 +183,17 @@ export interface AnalysisSummary {
   policy_count: number;
 }
 
-export type Analysis = AnalysisSummary & {
+export type Analysis = AnalysisSummary & ({
   fingerprint: string;
+  repository?: RepositorySource | null;
+  requested_files?: string[];
   nodes: ServiceNode[];
   edges: DependencyEdge[];
   policies: Policy[];
   findings: Finding[];
   stages: string[];
   assumptions: string[];
-};
+});
 
 export interface PolicyConfirmation {
   /**

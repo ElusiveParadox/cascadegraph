@@ -22,7 +22,11 @@ export const GetSystemStatusResponse = zod.object({
   "supported_parsers": zod.array(zod.string()),
   "limitations": zod.array(zod.string()),
   "max_archive_mb": zod.number(),
-  "max_files": zod.int()
+  "max_files": zod.int(),
+  "max_expanded_mb": zod.int().optional(),
+  "max_source_mb": zod.int().optional(),
+  "max_file_kb": zod.int().optional(),
+  "max_source_files": zod.int().optional()
 })
 
 
@@ -59,6 +63,14 @@ export const CreateAnalysisResponse = zod.object({
   "policy_count": zod.int()
 }).and(zod.object({
   "fingerprint": zod.string(),
+  "repository": zod.union([zod.object({
+  "repository_url": zod.string(),
+  "commit_sha": zod.string(),
+  "ref": zod.string(),
+  "project_path": zod.string(),
+  "supplemented_paths": zod.array(zod.string())
+}),zod.null()]).optional(),
+  "requested_files": zod.array(zod.string()).optional(),
   "nodes": zod.array(zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -133,10 +145,15 @@ export const CreateAnalysisResponse = zod.object({
 
 
 export const uploadArchiveBodyUseAiDefault = false;
+export const uploadArchiveBodyProjectPathDefault = `.`;
+export const uploadArchiveBodyProjectPathMax = 200;
+
+
 
 export const UploadArchiveBody = zod.object({
   "file": zod.instanceof(Blob),
-  "use_ai": zod.boolean().default(uploadArchiveBodyUseAiDefault)
+  "use_ai": zod.boolean().default(uploadArchiveBodyUseAiDefault),
+  "project_path": zod.string().max(uploadArchiveBodyProjectPathMax).default(uploadArchiveBodyProjectPathDefault)
 })
 
 export const UploadArchiveResponse = zod.object({
@@ -151,6 +168,244 @@ export const UploadArchiveResponse = zod.object({
   "policy_count": zod.int()
 }).and(zod.object({
   "fingerprint": zod.string(),
+  "repository": zod.union([zod.object({
+  "repository_url": zod.string(),
+  "commit_sha": zod.string(),
+  "ref": zod.string(),
+  "project_path": zod.string(),
+  "supplemented_paths": zod.array(zod.string())
+}),zod.null()]).optional(),
+  "requested_files": zod.array(zod.string()).optional(),
+  "nodes": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "startup_dependencies": zod.array(zod.string()),
+  "evidence": zod.array(zod.object({
+  "path": zod.string(),
+  "line_start": zod.int(),
+  "line_end": zod.int(),
+  "excerpt": zod.string(),
+  "sha256": zod.string()
+}))
+})),
+  "edges": zod.array(zod.object({
+  "id": zod.string(),
+  "source": zod.string(),
+  "target": zod.string(),
+  "evidence_kind": zod.string(),
+  "confirmed": zod.boolean(),
+  "policy_ids": zod.array(zod.string()),
+  "evidence": zod.array(zod.object({
+  "path": zod.string(),
+  "line_start": zod.int(),
+  "line_end": zod.int(),
+  "excerpt": zod.string(),
+  "sha256": zod.string()
+})),
+  "confirmation_note": zod.string().nullish()
+})),
+  "policies": zod.array(zod.object({
+  "id": zod.string(),
+  "framework": zod.string(),
+  "symbol": zod.string(),
+  "service_id": zod.string().nullable(),
+  "edge_id": zod.string().nullable(),
+  "source_semantics": zod.string(),
+  "source_value": zod.int().nullable(),
+  "max_total_attempts": zod.int().nullable(),
+  "retry_on": zod.array(zod.string()),
+  "backoff": zod.object({
+  "kind": zod.enum(['none', 'fixed', 'exponential', 'unknown']),
+  "delay_ms": zod.number().nullable(),
+  "multiplier": zod.number(),
+  "cap_ms": zod.number().nullable(),
+  "jitter_ms": zod.number()
+}),
+  "per_attempt_timeout_ms": zod.number().nullable(),
+  "overall_deadline_ms": zod.number().nullable(),
+  "resolution_status": zod.string(),
+  "extraction_method": zod.string(),
+  "confidence": zod.string(),
+  "evidence": zod.array(zod.object({
+  "path": zod.string(),
+  "line_start": zod.int(),
+  "line_end": zod.int(),
+  "excerpt": zod.string(),
+  "sha256": zod.string()
+})),
+  "unresolved": zod.array(zod.string()),
+  "confirmed": zod.boolean(),
+  "confirmation_note": zod.string().nullable(),
+  "category_limits": zod.record(zod.string(), zod.int().nullable()).optional(),
+  "allowed_methods": zod.union([zod.array(zod.string()),zod.null()]).optional()
+})),
+  "findings": zod.array(zod.object({
+  "severity": zod.string(),
+  "title": zod.string(),
+  "detail": zod.string()
+})),
+  "stages": zod.array(zod.string()),
+  "assumptions": zod.array(zod.string())
+}))
+
+
+export const analyzeRepositoryBodyRepositoryUrlMin = 10;
+export const analyzeRepositoryBodyRepositoryUrlMax = 300;
+
+export const analyzeRepositoryBodyRefDefault = ``;
+export const analyzeRepositoryBodyRefMax = 200;
+
+export const analyzeRepositoryBodyProjectPathDefault = `.`;
+export const analyzeRepositoryBodyProjectPathMax = 200;
+
+export const analyzeRepositoryBodyUseAiDefault = false;
+
+export const AnalyzeRepositoryBody = zod.object({
+  "repository_url": zod.string().min(analyzeRepositoryBodyRepositoryUrlMin).max(analyzeRepositoryBodyRepositoryUrlMax),
+  "ref": zod.string().max(analyzeRepositoryBodyRefMax).default(analyzeRepositoryBodyRefDefault),
+  "project_path": zod.string().max(analyzeRepositoryBodyProjectPathMax).default(analyzeRepositoryBodyProjectPathDefault),
+  "use_ai": zod.boolean().default(analyzeRepositoryBodyUseAiDefault)
+})
+
+export const AnalyzeRepositoryResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "source_type": zod.string(),
+  "status": zod.string(),
+  "created_at": zod.string(),
+  "expires_at": zod.string(),
+  "file_count": zod.int(),
+  "service_count": zod.int(),
+  "policy_count": zod.int()
+}).and(zod.object({
+  "fingerprint": zod.string(),
+  "repository": zod.union([zod.object({
+  "repository_url": zod.string(),
+  "commit_sha": zod.string(),
+  "ref": zod.string(),
+  "project_path": zod.string(),
+  "supplemented_paths": zod.array(zod.string())
+}),zod.null()]).optional(),
+  "requested_files": zod.array(zod.string()).optional(),
+  "nodes": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "startup_dependencies": zod.array(zod.string()),
+  "evidence": zod.array(zod.object({
+  "path": zod.string(),
+  "line_start": zod.int(),
+  "line_end": zod.int(),
+  "excerpt": zod.string(),
+  "sha256": zod.string()
+}))
+})),
+  "edges": zod.array(zod.object({
+  "id": zod.string(),
+  "source": zod.string(),
+  "target": zod.string(),
+  "evidence_kind": zod.string(),
+  "confirmed": zod.boolean(),
+  "policy_ids": zod.array(zod.string()),
+  "evidence": zod.array(zod.object({
+  "path": zod.string(),
+  "line_start": zod.int(),
+  "line_end": zod.int(),
+  "excerpt": zod.string(),
+  "sha256": zod.string()
+})),
+  "confirmation_note": zod.string().nullish()
+})),
+  "policies": zod.array(zod.object({
+  "id": zod.string(),
+  "framework": zod.string(),
+  "symbol": zod.string(),
+  "service_id": zod.string().nullable(),
+  "edge_id": zod.string().nullable(),
+  "source_semantics": zod.string(),
+  "source_value": zod.int().nullable(),
+  "max_total_attempts": zod.int().nullable(),
+  "retry_on": zod.array(zod.string()),
+  "backoff": zod.object({
+  "kind": zod.enum(['none', 'fixed', 'exponential', 'unknown']),
+  "delay_ms": zod.number().nullable(),
+  "multiplier": zod.number(),
+  "cap_ms": zod.number().nullable(),
+  "jitter_ms": zod.number()
+}),
+  "per_attempt_timeout_ms": zod.number().nullable(),
+  "overall_deadline_ms": zod.number().nullable(),
+  "resolution_status": zod.string(),
+  "extraction_method": zod.string(),
+  "confidence": zod.string(),
+  "evidence": zod.array(zod.object({
+  "path": zod.string(),
+  "line_start": zod.int(),
+  "line_end": zod.int(),
+  "excerpt": zod.string(),
+  "sha256": zod.string()
+})),
+  "unresolved": zod.array(zod.string()),
+  "confirmed": zod.boolean(),
+  "confirmation_note": zod.string().nullable(),
+  "category_limits": zod.record(zod.string(), zod.int().nullable()).optional(),
+  "allowed_methods": zod.union([zod.array(zod.string()),zod.null()]).optional()
+})),
+  "findings": zod.array(zod.object({
+  "severity": zod.string(),
+  "title": zod.string(),
+  "detail": zod.string()
+})),
+  "stages": zod.array(zod.string()),
+  "assumptions": zod.array(zod.string())
+}))
+
+
+export const analyzeSourcesBodyFilesMax = 100;
+
+export const analyzeSourcesBodyPathsItemMax = 300;
+
+export const analyzeSourcesBodyPathsMax = 100;
+
+export const analyzeSourcesBodyRepositoryUrlDefault = ``;
+export const analyzeSourcesBodyRepositoryUrlMax = 300;
+
+export const analyzeSourcesBodyRefDefault = ``;
+export const analyzeSourcesBodyRefMax = 200;
+
+export const analyzeSourcesBodyProjectPathDefault = `.`;
+export const analyzeSourcesBodyProjectPathMax = 200;
+
+export const analyzeSourcesBodyUseAiDefault = false;
+
+export const AnalyzeSourcesBody = zod.object({
+  "files": zod.array(zod.instanceof(Blob)).min(1).max(analyzeSourcesBodyFilesMax),
+  "paths": zod.array(zod.string().max(analyzeSourcesBodyPathsItemMax)).max(analyzeSourcesBodyPathsMax).optional(),
+  "repository_url": zod.string().max(analyzeSourcesBodyRepositoryUrlMax).default(analyzeSourcesBodyRepositoryUrlDefault),
+  "ref": zod.string().max(analyzeSourcesBodyRefMax).default(analyzeSourcesBodyRefDefault),
+  "project_path": zod.string().max(analyzeSourcesBodyProjectPathMax).default(analyzeSourcesBodyProjectPathDefault),
+  "use_ai": zod.boolean().default(analyzeSourcesBodyUseAiDefault)
+})
+
+export const AnalyzeSourcesResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "source_type": zod.string(),
+  "status": zod.string(),
+  "created_at": zod.string(),
+  "expires_at": zod.string(),
+  "file_count": zod.int(),
+  "service_count": zod.int(),
+  "policy_count": zod.int()
+}).and(zod.object({
+  "fingerprint": zod.string(),
+  "repository": zod.union([zod.object({
+  "repository_url": zod.string(),
+  "commit_sha": zod.string(),
+  "ref": zod.string(),
+  "project_path": zod.string(),
+  "supplemented_paths": zod.array(zod.string())
+}),zod.null()]).optional(),
+  "requested_files": zod.array(zod.string()).optional(),
   "nodes": zod.array(zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -240,6 +495,14 @@ export const GetAnalysisResponse = zod.object({
   "policy_count": zod.int()
 }).and(zod.object({
   "fingerprint": zod.string(),
+  "repository": zod.union([zod.object({
+  "repository_url": zod.string(),
+  "commit_sha": zod.string(),
+  "ref": zod.string(),
+  "project_path": zod.string(),
+  "supplemented_paths": zod.array(zod.string())
+}),zod.null()]).optional(),
+  "requested_files": zod.array(zod.string()).optional(),
   "nodes": zod.array(zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -355,6 +618,14 @@ export const ConfirmPolicyResponse = zod.object({
   "policy_count": zod.int()
 }).and(zod.object({
   "fingerprint": zod.string(),
+  "repository": zod.union([zod.object({
+  "repository_url": zod.string(),
+  "commit_sha": zod.string(),
+  "ref": zod.string(),
+  "project_path": zod.string(),
+  "supplemented_paths": zod.array(zod.string())
+}),zod.null()]).optional(),
+  "requested_files": zod.array(zod.string()).optional(),
   "nodes": zod.array(zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -454,6 +725,14 @@ export const ConfirmEdgeResponse = zod.object({
   "policy_count": zod.int()
 }).and(zod.object({
   "fingerprint": zod.string(),
+  "repository": zod.union([zod.object({
+  "repository_url": zod.string(),
+  "commit_sha": zod.string(),
+  "ref": zod.string(),
+  "project_path": zod.string(),
+  "supplemented_paths": zod.array(zod.string())
+}),zod.null()]).optional(),
+  "requested_files": zod.array(zod.string()).optional(),
   "nodes": zod.array(zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -971,6 +1250,14 @@ export const GetReportResponse = zod.object({
   "policy_count": zod.int()
 }).and(zod.object({
   "fingerprint": zod.string(),
+  "repository": zod.union([zod.object({
+  "repository_url": zod.string(),
+  "commit_sha": zod.string(),
+  "ref": zod.string(),
+  "project_path": zod.string(),
+  "supplemented_paths": zod.array(zod.string())
+}),zod.null()]).optional(),
+  "requested_files": zod.array(zod.string()).optional(),
   "nodes": zod.array(zod.object({
   "id": zod.string(),
   "name": zod.string(),
