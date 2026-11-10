@@ -3,12 +3,6 @@ on:
   workflow_dispatch:
   push:
     branches: [main, "feat/cascadegraph-mvp"]
-    paths:
-      - "sample-app/**"
-      - "src/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - ".github/workflows/compose-validation.yml"
 permissions:
   contents: read
 jobs:

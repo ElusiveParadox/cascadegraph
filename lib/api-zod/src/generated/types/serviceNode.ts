@@ -12,6 +12,4 @@ export interface ServiceNode {
   name: string;
   startup_dependencies: string[];
   evidence: Evidence[];
-  /** @nullable */
-  confirmation_note?: string | null;
 }

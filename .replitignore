@@ -8,6 +8,8 @@ __pycache__
 .pytest_cache
 .ruff_cache
 generated-artifacts
+test-results
+playwright-report
 *.sqlite3
 *.sqlite3-*
 .env

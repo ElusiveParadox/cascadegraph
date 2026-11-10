@@ -104,8 +104,6 @@ export interface ServiceNode {
   name: string;
   startup_dependencies: string[];
   evidence: Evidence[];
-  /** @nullable */
-  confirmation_note?: string | null;
 }
 
 export interface DependencyEdge {
@@ -116,6 +114,8 @@ export interface DependencyEdge {
   confirmed: boolean;
   policy_ids: string[];
   evidence: Evidence[];
+  /** @nullable */
+  confirmation_note?: string | null;
 }
 
 export interface Finding {

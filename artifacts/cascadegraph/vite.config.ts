@@ -65,6 +65,10 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    // CI-only server-side proxy; browser code stays artifact-relative.
+    proxy: process.env.CI_API_UPSTREAM
+      ? { '/api': { target: process.env.CI_API_UPSTREAM } }
+      : undefined,
     port,
     strictPort: true,
     host: '0.0.0.0',

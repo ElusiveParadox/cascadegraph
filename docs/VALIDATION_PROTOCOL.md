@@ -28,6 +28,12 @@ eligibility are retained. The unbound Istio example and optional custom-loop
 alternative are extraction fixtures, not extra active retries in the default
 sample topology.
 
+Deadline misses in measurements mean logical workload elapsed time at least the
+declared 10-second budget; the sample does not implement distributed cancellation
+at that budget. These scenarios have ample budget, so they calibrate zero misses,
+not nonzero deadline/cancellation behavior. Outgoing and retry counts are derived
+from independent receiving-service counters for this one-child chain.
+
 The acceptance tolerance is at most 0.5 absolute downstream-amplification error
 and one logical-success discrepancy per ten requests. This is not a latency
 accuracy assertion. All-failing healthy-timeout-free nested retries should match

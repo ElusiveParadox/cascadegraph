@@ -69,8 +69,7 @@ export const CreateAnalysisResponse = zod.object({
   "line_end": zod.int(),
   "excerpt": zod.string(),
   "sha256": zod.string()
-})),
-  "confirmation_note": zod.string().nullish()
+}))
 })),
   "edges": zod.array(zod.object({
   "id": zod.string(),
@@ -85,7 +84,8 @@ export const CreateAnalysisResponse = zod.object({
   "line_end": zod.int(),
   "excerpt": zod.string(),
   "sha256": zod.string()
-}))
+})),
+  "confirmation_note": zod.string().nullish()
 })),
   "policies": zod.array(zod.object({
   "id": zod.string(),
@@ -161,8 +161,7 @@ export const UploadArchiveResponse = zod.object({
   "line_end": zod.int(),
   "excerpt": zod.string(),
   "sha256": zod.string()
-})),
-  "confirmation_note": zod.string().nullish()
+}))
 })),
   "edges": zod.array(zod.object({
   "id": zod.string(),
@@ -177,7 +176,8 @@ export const UploadArchiveResponse = zod.object({
   "line_end": zod.int(),
   "excerpt": zod.string(),
   "sha256": zod.string()
-}))
+})),
+  "confirmation_note": zod.string().nullish()
 })),
   "policies": zod.array(zod.object({
   "id": zod.string(),
@@ -250,8 +250,7 @@ export const GetAnalysisResponse = zod.object({
   "line_end": zod.int(),
   "excerpt": zod.string(),
   "sha256": zod.string()
-})),
-  "confirmation_note": zod.string().nullish()
+}))
 })),
   "edges": zod.array(zod.object({
   "id": zod.string(),
@@ -266,7 +265,8 @@ export const GetAnalysisResponse = zod.object({
   "line_end": zod.int(),
   "excerpt": zod.string(),
   "sha256": zod.string()
-}))
+})),
+  "confirmation_note": zod.string().nullish()
 })),
   "policies": zod.array(zod.object({
   "id": zod.string(),
@@ -365,8 +365,7 @@ export const ConfirmPolicyResponse = zod.object({
   "line_end": zod.int(),
   "excerpt": zod.string(),
   "sha256": zod.string()
-})),
-  "confirmation_note": zod.string().nullish()
+}))
 })),
   "edges": zod.array(zod.object({
   "id": zod.string(),
@@ -381,7 +380,8 @@ export const ConfirmPolicyResponse = zod.object({
   "line_end": zod.int(),
   "excerpt": zod.string(),
   "sha256": zod.string()
-}))
+})),
+  "confirmation_note": zod.string().nullish()
 })),
   "policies": zod.array(zod.object({
   "id": zod.string(),
@@ -464,8 +464,7 @@ export const ConfirmEdgeResponse = zod.object({
   "line_end": zod.int(),
   "excerpt": zod.string(),
   "sha256": zod.string()
-})),
-  "confirmation_note": zod.string().nullish()
+}))
 })),
   "edges": zod.array(zod.object({
   "id": zod.string(),
@@ -480,7 +479,8 @@ export const ConfirmEdgeResponse = zod.object({
   "line_end": zod.int(),
   "excerpt": zod.string(),
   "sha256": zod.string()
-}))
+})),
+  "confirmation_note": zod.string().nullish()
 })),
   "policies": zod.array(zod.object({
   "id": zod.string(),
@@ -981,8 +981,7 @@ export const GetReportResponse = zod.object({
   "line_end": zod.int(),
   "excerpt": zod.string(),
   "sha256": zod.string()
-})),
-  "confirmation_note": zod.string().nullish()
+}))
 })),
   "edges": zod.array(zod.object({
   "id": zod.string(),
@@ -997,7 +996,8 @@ export const GetReportResponse = zod.object({
   "line_end": zod.int(),
   "excerpt": zod.string(),
   "sha256": zod.string()
-}))
+})),
+  "confirmation_note": zod.string().nullish()
 })),
   "policies": zod.array(zod.object({
   "id": zod.string(),

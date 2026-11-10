@@ -69,6 +69,13 @@ async def main():
         row = dict(name=label, predicted_amplification=prediction["amplification"],
                    measured_amplification=amplification, absolute_error=round(error, 6),
                    predicted_successes=prediction["succeeded"], measured_successes=sum(outcomes),
+                   predicted_deadline_misses=prediction["deadline_misses"],
+                   measured_deadline_misses=sum(t >= scenario.deadline_ms for t in latencies),
+                   measured_outgoing_requests={
+                       "gateway": actual["order"]["incoming"],
+                       "order": actual["inventory"]["incoming"],
+                   },
+                   measured_retry_attempts=max(0, actual["inventory"]["incoming"] - logical),
                    logical_requests=logical)
         rows.append(row)
         raw.append(dict(case=row, prediction=prediction, observed=actual,
@@ -76,7 +83,8 @@ async def main():
         if logical != 10:
             raise AssertionError("Workload did not reach gateway")
         # Count/error gates, not an assertion of perfect latency realism.
-        if error > 0.5 or abs(prediction["succeeded"] - sum(outcomes)) > 1:
+        if (error > 0.5 or abs(prediction["succeeded"] - sum(outcomes)) > 1
+                or abs(prediction["deadline_misses"] - row["measured_deadline_misses"]) > 1):
             raise AssertionError(f"Prediction discrepancy exceeds declared tolerance: {row}")
     out = Path("generated-artifacts")
     out.mkdir(exist_ok=True)

@@ -29,6 +29,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "24"
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
+        with:
+          version: "0.13.4"
+      - run: uv sync --frozen
       - run: corepack enable && corepack prepare pnpm@10.26.1 --activate
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @workspace/api-spec run codegen
@@ -39,3 +43,5 @@ jobs:
         env:
           PORT: "8080"
           BASE_PATH: /
+      - run: pnpm --filter @workspace/cascadegraph exec playwright install --with-deps chromium
+      - run: pnpm --filter @workspace/cascadegraph test:e2e

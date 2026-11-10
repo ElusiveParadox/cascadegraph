@@ -68,3 +68,5 @@ __pycache__/
 /generated-artifacts/
 .coverage
 .mypy_cache/
+test-results/
+playwright-report/

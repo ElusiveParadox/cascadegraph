@@ -15,4 +15,6 @@ export interface DependencyEdge {
   confirmed: boolean;
   policy_ids: string[];
   evidence: Evidence[];
+  /** @nullable */
+  confirmation_note?: string | null;
 }

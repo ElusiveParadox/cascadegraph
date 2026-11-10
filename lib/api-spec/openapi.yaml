@@ -246,7 +246,6 @@ components:
         name: { type: string }
         startup_dependencies: { type: array, items: { type: string } }
         evidence: { type: array, items: { $ref: "#/components/schemas/Evidence" } }
-        confirmation_note: { type: ["string", "null"] }
     DependencyEdge:
       type: object
       required: [id, source, target, evidence_kind, confirmed, policy_ids, evidence]
@@ -258,6 +257,7 @@ components:
         confirmed: { type: boolean }
         policy_ids: { type: array, items: { type: string } }
         evidence: { type: array, items: { $ref: "#/components/schemas/Evidence" } }
+        confirmation_note: { type: ["string", "null"] }
     Finding:
       type: object
       required: [severity, title, detail]
