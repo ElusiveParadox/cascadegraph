@@ -16,8 +16,18 @@
 - Executed 110 Python tests, Ruff, workspace TypeScript, frontend helper/retry/
   file-intake tests and production frontend build successfully. JavaScript
   audit has no known vulnerabilities; static/privacy scans report no findings.
-- Full browser journey and remote GitHub CI/merge verification are in progress;
-  no production publication or external developer feedback is claimed.
+- Added two further PostgreSQL cancellation/ambiguous-commit regressions; all
+  eight PostgreSQL integration tests passed. A real desktop/mobile browser
+  journey passed sample analysis, correction/reload, simulation (baseline 8x,
+  candidate 2x), actual report download, history and cancel/confirm deletion.
+  It observed no 503 responses.
+- The first GitHub run passed Python/security and the real Compose experiment,
+  but caught clipped keyboard focus on the history delete action in the wide
+  desktop layout. Added focused-control scrolling inside the table scroller;
+  all three targeted desktop/compact/zoom-reflow regressions pass locally.
+- GitHub PR: https://github.com/ElusiveParadox/cascadegraph/pull/3 .
+  Required checks and merge status remain authoritative remotely; no production
+  publication or external developer feedback is claimed.
 
 ## Compact navigation keyboard containment — 2026-11-10
 - Added expanded/control announcements, focus entry and a bidirectional loop over
