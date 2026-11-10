@@ -1,47 +1,41 @@
-"""Session-owned SQLite snapshots, short TTL and cascading deletion."""
+"""Session-owned snapshots, unchanged TTL and atomic cascading deletion."""
 
 import json
-import os
 import secrets
-import sqlite3
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
-from .security import ROOT
+from .storage_connection import backend, connection, lock
 
 
 @contextmanager
 def database():
-    path = Path(os.getenv("CASCADEGRAPH_DB_PATH", str(ROOT / "cascadegraph.sqlite3")))
-    db = sqlite3.connect(path, timeout=5)
-    db.row_factory = sqlite3.Row
-    db.execute("PRAGMA foreign_keys=ON")
-    db.executescript("""
-        CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, created_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS analyses (
-          id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-          data TEXT NOT NULL, expires_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS simulations (
-          id TEXT PRIMARY KEY, analysis_id TEXT NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
-          data TEXT NOT NULL);
-        CREATE INDEX IF NOT EXISTS analyses_owner ON analyses(owner);
-    """)
-    now = datetime.now(UTC).isoformat()
-    db.execute("DELETE FROM analyses WHERE expires_at < ?", (now,))
-    db.execute("DELETE FROM sessions WHERE created_at < ?", ((datetime.now(UTC) - timedelta(hours=25)).isoformat(),))
-    db.commit()
-    try:
+    with connection() as db:
+        lock(db)
+        cleanup(db)
         yield db
-        db.commit()
-    finally:
-        db.close()
+
+
+def cleanup(db):
+    now = datetime.now(UTC)
+    db.execute("DELETE FROM analyses WHERE expires_at <= ?", (now.isoformat(),))
+    db.execute("DELETE FROM sessions WHERE created_at <= ?", ((now - timedelta(hours=25)).isoformat(),))
+
+
+def purge():
+    with database():
+        pass
+
+
+def description():
+    mode = "PostgreSQL · durable across app updates" if backend() == "postgres" else "SQLite · ephemeral demo"
+    return f"{mode} · session-owned · 24-hour retention"
 
 
 def create_session() -> str:
     token = secrets.token_urlsafe(32)
     with database() as db:
-        if db.execute("SELECT count(*) FROM sessions").fetchone()[0] >= 5000:
+        if db.execute("SELECT count(*) AS total FROM sessions").fetchone()["total"] >= 5000:
             raise ValueError("Demo session capacity reached; retry after retention cleanup")
         db.execute("INSERT INTO sessions VALUES (?,?)", (token, datetime.now(UTC).isoformat()))
     return token
@@ -52,13 +46,35 @@ def session_exists(token: str) -> bool:
         return bool(db.execute("SELECT 1 FROM sessions WHERE id=?", (token,)).fetchone())
 
 
-def save_analysis(owner, data):
+def ensure_account_session(owner: str):
+    """Stable pseudonymous GitHub owner, without storing provider credentials."""
     with database() as db:
-        existing = db.execute("SELECT owner FROM analyses WHERE id=?", (data["id"],)).fetchone()
+        if not db.execute("SELECT 1 FROM sessions WHERE id=?", (owner,)).fetchone():
+            if db.execute("SELECT count(*) AS total FROM sessions").fetchone()["total"] >= 5000:
+                raise ValueError("Session capacity reached")
+            db.execute("INSERT INTO sessions VALUES (?,?)", (owner, datetime.now(UTC).isoformat()))
+        else:
+            db.execute("UPDATE sessions SET created_at=? WHERE id=?", (datetime.now(UTC).isoformat(), owner))
+
+
+def save_analysis(owner, data, *, update_only=False):
+    with database() as db:
+        existing = db.execute("SELECT owner, expires_at FROM analyses WHERE id=?", (data["id"],)).fetchone()
         if existing and existing["owner"] != owner:
             raise PermissionError("Analysis owner mismatch")
-        if not existing and db.execute("SELECT count(*) FROM analyses WHERE owner=?", (owner,)).fetchone()[0] >= 20:
+        if update_only and not existing:
+            raise PermissionError("Analysis unavailable")
+        if not existing and db.execute(
+            "SELECT count(*) AS total FROM analyses WHERE owner=?", (owner,)
+        ).fetchone()["total"] >= 20:
             raise ValueError("Delete an analysis before exceeding 20 analyses per session")
+        data = dict(data)
+        if existing:
+            data["expires_at"] = existing["expires_at"]
+        expiry = datetime.fromisoformat(data["expires_at"])
+        now = datetime.now(UTC)
+        if expiry <= now or expiry > now + timedelta(hours=24):
+            raise ValueError("Analysis must expire within 24 hours")
         db.execute("INSERT INTO analyses VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
                    (data["id"], owner, json.dumps(data), data["expires_at"]))
 
@@ -71,7 +87,8 @@ def get_analysis(owner, aid):
 
 def list_analyses(owner):
     with database() as db:
-        return [json.loads(r["data"]) for r in db.execute("SELECT data FROM analyses WHERE owner=? ORDER BY rowid DESC", (owner,))]
+        rows = [json.loads(r["data"]) for r in db.execute("SELECT data FROM analyses WHERE owner=?", (owner,))]
+        return sorted(rows, key=lambda r: (r["created_at"], r["id"]), reverse=True)
 
 
 def delete_analysis(owner, aid):
@@ -80,19 +97,22 @@ def delete_analysis(owner, aid):
 
 
 def save_simulation(owner, data):
-    if not get_analysis(owner, data["analysis_id"]):
-        raise PermissionError("Analysis unavailable")
     with database() as db:
-        if db.execute("SELECT count(*) FROM simulations WHERE analysis_id=?", (data["analysis_id"],)).fetchone()[0] >= 20:
+        if not db.execute("SELECT 1 FROM analyses WHERE id=? AND owner=?", (data["analysis_id"], owner)).fetchone():
+            raise PermissionError("Analysis unavailable")
+        if db.execute(
+            "SELECT count(*) AS total FROM simulations WHERE analysis_id=?", (data["analysis_id"],)
+        ).fetchone()["total"] >= 20:
             raise ValueError("Simulation limit of 20 per analysis reached")
         db.execute("INSERT INTO simulations VALUES (?,?,?)", (data["id"], data["analysis_id"], json.dumps(data)))
 
 
 def simulations(owner, aid):
-    if not get_analysis(owner, aid):
-        return []
     with database() as db:
-        return [json.loads(r["data"]) for r in db.execute("SELECT data FROM simulations WHERE analysis_id=? ORDER BY rowid", (aid,))]
+        rows = [json.loads(r["data"]) for r in db.execute(
+            """SELECT simulations.data FROM simulations JOIN analyses ON analyses.id=simulations.analysis_id
+               WHERE analyses.id=? AND analyses.owner=?""", (aid, owner))]
+        return sorted(rows, key=lambda r: (r["created_at"], r["id"]))
 
 
 def get_simulation(owner, sid):

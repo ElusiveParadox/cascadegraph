@@ -7,6 +7,7 @@ import os
 import time
 import uuid
 from collections import defaultdict, deque
+from contextlib import asynccontextmanager, suppress
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
@@ -14,9 +15,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from . import store
+from . import github_access, store
 from .ai import ai_available
 from .analysis import analyze, refresh_policy_findings, utcnow
+from .github_routes import router as github_router
 from .models import (
     MODEL_VERSION,
     Analysis,
@@ -26,7 +28,7 @@ from .models import (
     RepositoryInput,
     Scenario,
 )
-from .repository import fetch_repository
+from .repository import fetch_repository, parse_repository_url
 from .security import (
     MAX_ARCHIVE,
     MAX_BODY,
@@ -44,17 +46,28 @@ from .security import (
     validate_sources,
 )
 from .simulation import simulate
+from .storage_connection import StorageUnavailable
 
 logger = logging.getLogger("cascadegraph")
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 LIMITATIONS = [
     "Supports bounded Python Tenacity/urllib3, Istio VirtualService and Compose syntax only.",
     "Custom-loop AI support is restricted to the bundled range-loop pattern and requires explicit opt-in.",
-    "Public GitHub root URLs only; no arbitrary hosts, redirect following or private GitHub credentials. Private source must be uploaded.",
-    "SQLite demo storage may reset on republish; export reports. Analyses expire after 24 hours.",
+    "GitHub root URLs only. Private imports require your own read-only GitHub App authorization on selected repositories; uploads remain available.",
+    "Analyses expire after 24 hours; anonymous history requires the original browser cookie. GitHub sign-in uses separate account-owned history.",
     "The simulator supports acyclic call paths and sequential fan-out, not arbitrary production behavior.",
     "Measured validation describes only the committed sample and matching CI scenarios, never an uploaded application.",
 ]
+
+
+def storage_unavailable(correlation):
+    # A lost COMMIT acknowledgement can leave a successful write. Do not advise
+    # blindly retrying a mutation or pretend every 503 means it rolled back.
+    return JSONResponse({
+        "error": "History storage unavailable. Check history after recovery before retrying; no local fallback was used.",
+        "code": "STORAGE_UNAVAILABLE", "correlation_id": correlation,
+    }, 503, headers={"Cache-Control": "no-store", "X-Correlation-ID": correlation,
+                    "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"})
 
 
 class SafetyMiddleware(BaseHTTPMiddleware):
@@ -88,18 +101,31 @@ class SafetyMiddleware(BaseHTTPMiddleware):
         token = request.cookies.get("cg_session", "")
         if len(token) > 64:
             token = ""
-        new = not token or not store.session_exists(token)
-        if new:
-            try:
+        try:
+            new = not token or not store.session_exists(token)
+            if new:
                 token = store.create_session()
-            except ValueError:
-                return JSONResponse({"error": "Demo session capacity reached"}, 429)
+        except ValueError:
+            return JSONResponse({"error": "Demo session capacity reached"}, 429)
+        except Exception:
+            logger.error(json.dumps({"correlation_id": correlation, "event": "storage_unavailable"}))
+            return storage_unavailable(correlation)
         request.state.owner = token
+        try:
+            github_user = (None if request.method == "DELETE" and request.url.path == "/api/v1/github/connection"
+                           else github_access.identity(request.cookies.get("cg_github", "")))
+        except StorageUnavailable:
+            logger.error(json.dumps({"correlation_id": correlation, "event": "storage_unavailable"}))
+            return storage_unavailable(correlation)
+        except HTTPException as exc:
+            return JSONResponse({"error": exc.detail}, exc.status_code)
+        if github_user:
+            request.state.owner = github_user.owner
         if mutating:
             # Peer+session limits prevent bypass by discarding the cookie.
             peer = request.client.host if request.client else "unknown"
             now = time.monotonic()
-            for key in ("ip:" + peer, "session:" + token):
+            for key in ("ip:" + peer, "session:" + request.state.owner):
                 q = self.rates[key]
                 while q and q[0] < now - 60:
                     q.popleft()
@@ -132,6 +158,9 @@ class SafetyMiddleware(BaseHTTPMiddleware):
                     self.semaphore.release()
             else:
                 response = await call_next(request)
+        except StorageUnavailable:
+            logger.error(json.dumps({"correlation_id": correlation, "event": "storage_unavailable"}))
+            response = storage_unavailable(correlation)
         except HTTPException as exc:
             response = JSONResponse({"error": exc.detail}, exc.status_code)
         except Exception:
@@ -149,14 +178,45 @@ class SafetyMiddleware(BaseHTTPMiddleware):
         return response
 
 
-app = FastAPI(title="CascadeGraph", version="1.0.0", docs_url="/api/docs",
+@asynccontextmanager
+async def lifespan(app):
+    # No production schema mutation. Fail closed if PostgreSQL is unconfigured.
+    await asyncio.to_thread(store.purge)
+
+    async def retention():
+        while True:
+            await asyncio.sleep(60)
+            try:
+                await asyncio.to_thread(store.purge)
+                await asyncio.to_thread(github_access.prune)
+            except Exception:
+                logger.error('{"event":"retention_cleanup_failed"}')
+
+    task = asyncio.create_task(retention())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+        # Durable encrypted authorization is not a process-owned resource.
+        # Shutdown must not disconnect other replicas or returning users.
+
+
+app = FastAPI(title="CascadeGraph", version="1.0.0", docs_url="/api/docs", lifespan=lifespan,
               openapi_url="/api/openapi.json", redoc_url=None)
 app.add_middleware(SafetyMiddleware)
+app.include_router(github_router)
 
 
 @app.exception_handler(InputError)
 async def bad_input(request, exc):
     return JSONResponse({"error": str(exc), "code": "UNSUPPORTED_INPUT"}, 422)
+
+
+@app.exception_handler(PermissionError)
+async def unavailable_record(request, exc):
+    return JSONResponse({"error": "Analysis not found or expired"}, 404)
 
 
 @app.exception_handler(RequestValidationError)
@@ -188,11 +248,14 @@ def ready():
 
 @app.get("/api/v1/status", operation_id="getSystemStatus")
 def system_status():
+    limitations = list(LIMITATIONS)
+    if store.backend() == "sqlite":
+        limitations.append("SQLite demo storage may reset on republish; export reports.")
     return dict(version="1.0.0", model_version=MODEL_VERSION, ai_available=ai_available(),
                 ai_provider=os.getenv("LLM_PROVIDER", "replit_openai"),
-                storage="SQLite · session-owned · 24-hour retention · ephemeral demo",
+                storage=store.description(),
                 supported_parsers=["Docker Compose", "Tenacity", "urllib3 / requests", "Istio VirtualService", "Sample custom loop (opt-in AI)"],
-                limitations=LIMITATIONS, max_archive_mb=MAX_ARCHIVE // (1024 * 1024), max_files=MAX_FILES,
+                limitations=limitations, max_archive_mb=MAX_ARCHIVE // (1024 * 1024), max_files=MAX_FILES,
                 max_expanded_mb=MAX_EXPANDED // (1024 * 1024), max_source_mb=MAX_SOURCE // (1024 * 1024),
                 max_file_kb=MAX_FILE // 1024, max_source_files=100)
 
@@ -235,7 +298,7 @@ async def analyze_submission(request, files, name, source_type, use_ai, project_
     result.repository = repository
     if repository:
         repository.project_path = project_path.strip() or "."
-        result.assumptions.append(f"Public GitHub snapshot pinned to commit {repository.commit_sha}; no repository code was executed.")
+        result.assumptions.append(f"GitHub snapshot pinned to commit {repository.commit_sha}; no repository code was executed.")
         if repository.supplemented_paths:
             result.assumptions.append("User-uploaded source supplements/overrides repository paths; those excerpts are not claimed to originate from the pinned commit.")
     try:
@@ -247,16 +310,28 @@ async def analyze_submission(request, files, name, source_type, use_ai, project_
 
 @app.post("/api/v1/analyses/repository", status_code=201, operation_id="analyzeRepository")
 async def repository_analysis(data: RepositoryInput, request: Request):
-    files, repository = await fetch_repository(data.repository_url, data.ref)
+    files, repository = await fetch_for_user(request, data.repository_url, data.ref, data.private_access)
     return await analyze_submission(request, files, repository.repository_url, "github", data.use_ai,
                                     data.project_path, repository)
+
+
+async def fetch_for_user(request, repository_url, ref, private_access):
+    if not private_access:
+        return await fetch_repository(repository_url, ref)
+    owner, repo, _ = parse_repository_url(repository_url)
+    try:
+        async with asyncio.timeout(45):
+            token = await github_access.authorized_token(request.cookies.get("cg_github", ""), owner, repo)
+            return await fetch_repository(repository_url, ref, access_token=token)
+    except TimeoutError:
+        raise InputError("GitHub authorization/import timed out. Retry or upload the relevant source files.") from None
 
 
 @app.post("/api/v1/analyses/sources", status_code=201, operation_id="analyzeSources")
 async def source_analysis(
     request: Request, files: list[UploadFile] = File(...), paths: list[str] | None = Form(None),
     repository_url: str = Form("", max_length=300), ref: str = Form("", max_length=200),
-    project_path: str = Form(".", max_length=200), use_ai: bool = Form(False),
+    project_path: str = Form(".", max_length=200), use_ai: bool = Form(False), private_access: bool = Form(False),
 ):
     try:
         if not 1 <= len(files) <= 100 or paths is not None and len(paths) != len(files):
@@ -276,7 +351,7 @@ async def source_analysis(
         validate_sources(source)
         repository = None
         if repository_url.strip():
-            base, repository = await fetch_repository(repository_url, ref)
+            base, repository = await fetch_for_user(request, repository_url, ref, private_access)
             repository.supplemented_paths = sorted(source)
             base.update(source)
             source = base
@@ -314,7 +389,7 @@ def confirm_policy(analysisId: str, policyId: str, data: PolicyConfirmation, req
     p.confidence = "user_confirmed"
     # Original source_value and source evidence remain immutable.
     refresh_policy_findings(a)
-    store.save_analysis(request.state.owner, a.model_dump())
+    store.save_analysis(request.state.owner, a.model_dump(), update_only=True)
     return a
 
 
@@ -325,7 +400,7 @@ def confirm_edge(analysisId: str, edgeId: str, data: EdgeConfirmation, request: 
     if not e:
         raise HTTPException(404, detail="Edge not found")
     e.confirmed, e.confirmation_note = True, redact(data.note)
-    store.save_analysis(request.state.owner, a.model_dump())
+    store.save_analysis(request.state.owner, a.model_dump(), update_only=True)
     return a
 
 

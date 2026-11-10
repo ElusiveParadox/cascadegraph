@@ -8,24 +8,33 @@ permissions:
 jobs:
   experiment:
     name: Measured three-service experiment
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    if: github.repository == 'ElusiveParadox/cascadegraph'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
         with:
           version: "0.13.4"
       - run: uv sync --frozen
+      - run: uv run --frozen pytest tests/test_calibration_report.py -q
       - run: docker compose -f sample-app/compose.yaml config --quiet
       - run: docker compose -f sample-app/compose.yaml up --build --wait --wait-timeout 180 -d
+      - run: |
+          mkdir -p generated-artifacts
+          sha256sum validation/verified-sample.json > generated-artifacts/frozen.sha256
+          docker compose -f sample-app/compose.yaml images --format json > generated-artifacts/container-images.json
       - run: uv run --frozen python sample-app/experiment.py
+        timeout-minutes: 25
         env:
           LLM_ENABLED: "false"
+      - run: sha256sum --check generated-artifacts/frozen.sha256
+        if: always()
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: measured-validation
-          path: generated-artifacts/*validation.json
+          path: generated-artifacts/*.json
           retention-days: 14
           if-no-files-found: warn
       - run: docker compose -f sample-app/compose.yaml logs --tail 30

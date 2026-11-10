@@ -3,14 +3,17 @@
 import asyncio
 import json
 import os
+import platform
 import statistics
 import time
+from importlib.metadata import version
 from pathlib import Path
 
 import requests
+from concurrent_experiment import drain, run
 
 from cascadegraph_runtime.analysis import analyze, utcnow
-from cascadegraph_runtime.models import Scenario
+from cascadegraph_runtime.models import MODEL_VERSION, Scenario
 from cascadegraph_runtime.security import sample_files
 from cascadegraph_runtime.simulation import simulate
 
@@ -27,8 +30,11 @@ def configure(service, data):
 
 
 async def main():
+    if (os.getenv("GITHUB_ACTIONS") != "true" or os.getenv("RUNNER_ENVIRONMENT") != "github-hosted"
+            or os.getenv("GITHUB_REPOSITORY") != "ElusiveParadox/cascadegraph"):
+        raise SystemExit("Measurements run only on the trusted repository's GitHub-hosted runner")
     analysis = await analyze(sample_files(), "Trusted CI sample", "sample")
-    rows, raw = [], []
+    rows, raw, failures = [], [], []
     cases = [
         ("Healthy baseline", "healthy", 0, 0, 3),
         ("Fixed downstream latency", "latency", 60, 0, 3),
@@ -60,8 +66,7 @@ async def main():
             latencies.append((time.monotonic() - start) * 1000)
             # Sequential low-load runs remove queue/capacity variance; simulator
             # arrivals are spaced 5s, so the failure cases cannot overlap.
-        time.sleep(0.5)  # collect operations finishing after client timeout
-        actual = {s: get(s, "/metrics").json() for s in PORTS}
+        actual = drain()  # Include late physical work before resetting any service.
         logical = actual["gateway"]["incoming"]
         downstream = actual["order"]["incoming"] + actual["inventory"]["incoming"]
         amplification = downstream / logical
@@ -85,7 +90,7 @@ async def main():
         # Count/error gates, not an assertion of perfect latency realism.
         if (error > 0.5 or abs(prediction["succeeded"] - sum(outcomes)) > 1
                 or abs(prediction["deadline_misses"] - row["measured_deadline_misses"]) > 1):
-            raise AssertionError(f"Prediction discrepancy exceeds declared tolerance: {row}")
+            failures.append(row)
     out = Path("generated-artifacts")
     out.mkdir(exist_ok=True)
     report = dict(status="measured", detail="Six controlled, low-load CI sample experiments. Counts are compared; production latency accuracy is not claimed.",
@@ -94,6 +99,13 @@ async def main():
     (out / "validation.json").write_text(json.dumps(report, indent=2))
     (out / "raw-validation.json").write_text(json.dumps(raw, indent=2))
     print(json.dumps(report, indent=2))
+    if failures:
+        raise AssertionError("Legacy count tolerance exceeded; raw measurements were preserved")
+    run(analysis, dict(workflow_url=report["workflow_url"], commit_sha=report["commit_sha"],
+        measured_at=utcnow(), model_version=MODEL_VERSION, schema_version="concurrent-calibration-1",
+        python=platform.python_version(), platform=platform.platform(),
+        library_versions={name: version(name) for name in ("requests", "urllib3", "tenacity")},
+        runner_image=os.getenv("ImageVersion", "unknown")))
 
 
 if __name__ == "__main__":

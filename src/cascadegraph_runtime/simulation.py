@@ -86,7 +86,8 @@ def simulate(analysis: Analysis, scenario: Scenario, candidate=False) -> dict:
     visit(entry)
     heap, seq = [], itertools.count()
     clock, events = 0.0, 0
-    metrics = {n: dict(service_id=n, attempts=0, retries=0, failures=0, peak_concurrency=0, peak_queue=0) for n in sorted(nodes)}
+    metrics = {n: dict(service_id=n, attempts=0, retries=0, failures=0, peak_concurrency=0, peak_queue=0,
+                      busy_ms=0.0) for n in sorted(nodes)}
     active = {n: 0 for n in nodes}
     queues = {n: deque() for n in nodes}
     bins = defaultdict(lambda: [0, 0])
@@ -102,6 +103,7 @@ def simulate(analysis: Analysis, scenario: Scenario, candidate=False) -> dict:
 
     def physical(service, request, callback, is_retry=False, root=False):
         nonlocal attempts_total, retries_total, leaf_total
+        busy_started = 0.0
         m = metrics[service]
         m["attempts"] += 1
         physical_counts[(request["id"], service)] += 1
@@ -119,6 +121,7 @@ def simulate(analysis: Analysis, scenario: Scenario, candidate=False) -> dict:
         def finish(outcome):
             nonlocal last_work_ms
             last_work_ms = max(last_work_ms, clock)
+            m["busy_ms"] += clock - busy_started
             if outcome != "ok":
                 m["failures"] += 1
             active[service] -= 1
@@ -128,6 +131,8 @@ def simulate(analysis: Analysis, scenario: Scenario, candidate=False) -> dict:
                 next_start()
 
         def start():
+            nonlocal busy_started
+            busy_started = clock
             active[service] += 1
             m["peak_concurrency"] = max(m["peak_concurrency"], active[service])
             if request["deadline"] <= clock:
@@ -259,6 +264,9 @@ def simulate(analysis: Analysis, scenario: Scenario, candidate=False) -> dict:
     def percentile(q):
         return round(latencies[max(0, math.ceil(len(latencies) * q) - 1)], 3)
     initial = attempts_total - retries_total
+    for m in metrics.values():
+        m["mean_occupancy"] = round(m["busy_ms"] / last_work_ms, 6) if last_work_ms else 0
+        m["busy_ms"] = round(m["busy_ms"], 3)
     return dict(
         incoming_requests=scenario.requests, downstream_attempts=attempts_total,
         retry_attempts=retries_total, leaf_attempts=leaf_total,

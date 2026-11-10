@@ -114,6 +114,7 @@ class RepositoryInput(StrictModel):
     ref: str = Field(default="", max_length=200)
     project_path: str = Field(default=".", max_length=200)
     use_ai: bool = False
+    private_access: bool = False
 
 
 class PolicyConfirmation(StrictModel):

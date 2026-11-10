@@ -2,6 +2,7 @@ services:
   gateway:
     build:
       context: ./gateway
+      additional_contexts: {instrumentation: .}
     environment:
       ORDER_URL: http://order:8000
     ports: ["127.0.0.1:18080:8000"]
@@ -22,6 +23,7 @@ services:
   order:
     build:
       context: ./order
+      additional_contexts: {instrumentation: .}
     environment:
       INVENTORY_URL: http://inventory:8000
     ports: ["127.0.0.1:18081:8000"]
@@ -42,6 +44,7 @@ services:
   inventory:
     build:
       context: ./inventory
+      additional_contexts: {instrumentation: .}
     ports: ["127.0.0.1:18082:8000"]
     read_only: true
     tmpfs: ["/tmp:size=16m"]
