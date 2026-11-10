@@ -38,6 +38,11 @@ Install JavaScript dependencies with `pnpm install --frozen-lockfile`; Python
 dependencies use the platform package tool and `uv sync --frozen` for restoration.
 The package tool manages `.pythonlibs`; do not create a separate virtualenv.
 
+If an imported frontend fails with `vite: not found` or `node_modules missing`,
+restore JavaScript dependencies using the command above, then restart the
+existing managed frontend workflow. Do not replace the workflow or upgrade
+packages to resolve a missing installation.
+
 ## Verification record
 
 See PROGRESS.md, docs/VALIDATION_PROTOCOL.md and GitHub required checks. Actual

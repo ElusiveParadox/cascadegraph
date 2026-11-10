@@ -1,5 +1,21 @@
 # Progress
 
+## Imported preview startup repair — 2026-11-10
+- Startup logs showed `vite: not found` because JavaScript dependencies were
+  absent. Restored them using the unchanged frozen pnpm lockfile and restarted
+  the existing CascadeGraph and component-preview workflows.
+- Verified all three managed workflows running, proxied API health/readiness
+  responses successful, and the CascadeGraph overview screenshot rendering
+  without browser errors.
+- Workspace TypeScript, frontend helper tests, all 86 Python tests and Ruff
+  passed. Optional AI remains unconfigured in this imported environment;
+  local analysis does not require it.
+- Corrected imported runtime modules from Node 20/Python 3.12 to Node 24/Python
+  3.13. Reinstalled frozen JavaScript dependencies with `--force`, recreated
+  Python dependencies with `uv sync --frozen --python 3.13`, and repeated the
+  checks successfully on Node 24.22.1/Python 3.13.11. All three workflows
+  restarted successfully; proxied readiness and the overview screenshot passed.
+
 ## 2026-11-10 — Foundation and repository inspection
 - Reviewed both supplied requirements documents and the merged workspace setup.
 - Verified the platform GitHub CLI proxy account and target repository permissions;
