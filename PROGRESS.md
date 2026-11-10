@@ -98,3 +98,30 @@
   real six-scenario Compose validation. The source journey deliberately delays
   initial history loading to check ownership readiness. Delete-dialog content
   has explicit precedence over its overlay; no forced-click test bypass is used.
+
+## Bounded storage outage execution — 2026-11-10
+- Audited the execution checkout: SQLite only, no storage-connection/vault modules
+  or prior uncertain-write contract. Kept the backend and existing retention mode.
+- All HTTP database calls now share immediate two-process admission with no queue,
+  100 ms SQLite lock waits, 400 ms transaction/VM limits and 800 ms whole-operation
+  deadlines. Running workers remain accounted for until reaped; cancellation and
+  one-second shutdown terminate work instead of abandoning threads.
+- Session resolution, quotas and simulation-parent ownership checks are atomic.
+  Storage failures never alter owner cookies or select fallback storage.
+  Ambiguous writes return explicit uncertain outcomes and are not retried.
+- Liveness bypasses storage, session creation and rate state. Readiness is
+  non-mutating, bounded, one-at-a-time and failure-cooled-down. API/ADR/threat-model
+  documentation includes exact budgets, OS termination limits and retry guidance;
+  curated OpenAPI and generated clients include health/error contracts.
+- Executed `uv run --frozen pytest`: **102 passed**, including **16 isolated
+  storage regressions** covering stalled acquisition/connect/query/commit,
+  event-loop heartbeat, HTTP saturation/liveness, pre-start/repeated cancellation,
+  shutdown/drained workers, actual SQLite locks/VM interruption, read-only probes,
+  cookie continuity/recovery, uncertain committed writes and concurrent quotas.
+- Executed `uv run --frozen ruff check src tests`, API code generation,
+  `pnpm run typecheck`, `pnpm --filter @workspace/cascadegraph test`, and
+  `git diff --check`: all passed.
+- Restarted the managed API workflow: clean startup. Proxied liveness/readiness
+  returned 200 with no-store/correlation headers and no Set-Cookie. App screenshot
+  rendered the existing overview without browser errors. No production publication
+  or external browser-journey test is claimed.

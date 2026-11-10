@@ -9,3 +9,4 @@
 | CG-RELEASE | P0 | 3 | Security, documentation and release | CG-VALIDATE | USER GATE | Implementation checks and docs complete; publication needs user approval |
 | CG-FEEDBACK | P1 | 2 | Test with 3–5 campus developers | CG-SIM | BLOCKED | Actual participants provide feedback; none recruited yet |
 | CG-SOURCE | P0 | 3 | Public repository URL, larger ZIPs and source-file fallback | CG-CORE | DONE | 86 Python tests and real URL-only browser journey pass; protected CI requires desktop/phone source and existing workflow checks |
+| CG-STORAGE | P0 | 3 | Bound storage outage latency | CG-CORE | DONE | Shared finite process admission, hard deadlines, safe uncertain writes, isolated outage/cancellation/recovery tests |

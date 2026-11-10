@@ -22,6 +22,10 @@ provider or GitHub credentials. SQLite retains only minimal redacted evidence.
 | CI compromise | Trusted branch/sample only, minimal permissions, pinned action SHAs, no production secrets, no Docker socket in app | Base image / dependency supply chain |
 | Artifact forgery | No public upload endpoint trusts measurements; verified report bundled by maintainer with actual CI provenance | Maintainer verification is a trust boundary, not cryptographic remote attestation |
 | Persistence loss | Explicit ephemeral demo warning, JSON export, local SQLite transactions | Durable public analyses are not supported until production storage is verified |
+| Storage outage / lock exhaustion | Two dedicated processes, zero queued calls, immediate 503 overload; 100 ms SQLite lock wait, 400 ms transaction VM budget, 800 ms whole-call deadline; TERM/KILL reap and 1 s shutdown | Process-spawn overhead is accepted for the demo. Uninterruptible kernel I/O can defeat kill/reap: fail shutdown explicitly, retain capacity accounting. No shared web-thread-pool exhaustion |
+| Health probe storm | Liveness bypasses database, cookies and rate limits; readiness is read-only, one in flight, 500 ms failure cooldown; read/health Retry-After 2 s with jitter/backoff guidance | Readiness tests availability of existing schema, not write success or durability |
+| Owner replacement on outage | Session lookup/creation uses bounded atomic storage; any storage error leaves cookies untouched; never interpret failure as absent owner or fail over | Cookie possession remains authorization; original owner history is tested after recovery |
+| Duplicate mutation after ambiguous commit | No transparent mutation retries; running-write deadline, lost worker or commit error reports uncertain outcome, no mutation Retry-After | Users must check history and reconcile after recovery; idempotency is not provided |
 
 ## Intended mode
 An anonymous bounded demo, not a private repository collaboration product.
@@ -32,3 +36,6 @@ persistent private analyses. Never interpret random analysis UUIDs alone as auth
 Adversarial archive/parser fixtures, session isolation/deletion, provider failure,
 strict input validation and simulator bounds are executable repository tests.
 Actual scan and CI results belong in PROGRESS.md, not anticipated results here.
+Isolated SQLite outage tests inject stalled acquisition/connect/query/commit,
+verify event-loop heartbeats, excess-capacity responses, cancellation/reaping,
+probe cooldown/recovery, cookie continuity and concurrent ownership/quota checks.

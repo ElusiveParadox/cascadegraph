@@ -1,0 +1,1 @@
+- [Storage availability](storage-availability.md) — stoppable execution, retained capacity, unchanged owners and uncertain-write semantics; keep spawned fault fixtures lightweight.

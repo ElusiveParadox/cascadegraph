@@ -5,6 +5,21 @@
  * Source-backed retry analysis and deterministic simulation.
  * OpenAPI spec version: 1.0.0
  */
+export type StorageErrorCode = typeof StorageErrorCode[keyof typeof StorageErrorCode];
+
+
+export const StorageErrorCode = {
+  STORAGE_UNAVAILABLE: 'STORAGE_UNAVAILABLE',
+  STORAGE_OVERLOADED: 'STORAGE_OVERLOADED',
+  STORAGE_OUTCOME_UNCERTAIN: 'STORAGE_OUTCOME_UNCERTAIN',
+} as const;
+
+export interface StorageError {
+  error: string;
+  code: StorageErrorCode;
+  correlation_id: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -392,4 +407,9 @@ export interface Report {
   measured_validation: ValidationStatus;
   limitations: string[];
 }
+
+/**
+ * Storage unavailable or capacity exhausted (two processes, zero queued). Running work has an 800 ms deadline plus up to 400 ms termination/reaping. STORAGE_OUTCOME_UNCERTAIN means a mutation may have committed; check history after recovery and do not blindly replay it. Never automatically retry mutations. Cookies are unchanged. Reads/health may retry after at least two seconds with jitter and bounded exponential backoff; health failure probes cool down for 500 ms. Retry-After is omitted for mutation requests.
+ */
+export type StorageFailureResponse = StorageError;
 
