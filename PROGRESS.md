@@ -141,3 +141,20 @@
   returned 200 with no-store/correlation headers and no Set-Cookie. App screenshot
   rendered the existing overview without browser errors. No production publication
   or external browser-journey test is claimed.
+
+## Frontend storage-outage retries — 2026-11-10
+- Query defaults honor ApiError Retry-After seconds/dates as a minimum, use
+  bounded exponential delay with positive jitter, and limit temporary storage
+  errors to three retries. Delays cap at 30 seconds; longer server hints stop
+  automatic retries instead of shortening the server's requested wait.
+- Uncertain storage outcomes never retry, including session-bootstrap GETs.
+  Mutation retries are explicitly disabled. Other errors retain the existing
+  one-retry limit and 404 exclusion. No storage backend changes.
+- Seven focused frontend tests cover timing/header parsing, caps, retry counts,
+  actual generated history/status requests, uncertain sessions, and mutations;
+  all pass alongside existing workspace helper tests.
+- Executed `pnpm run typecheck`, `uv run --frozen pytest` (104 passed),
+  `uv run --frozen ruff check src tests`, and `git diff --check`: passed.
+- Managed web workflow restarted cleanly and overview rendered. Preview observed
+  a temporary storage-overload 503; a subsequent proxied status request returned
+  200. No production publication or external browser-journey test is claimed.

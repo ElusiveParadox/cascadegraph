@@ -90,3 +90,12 @@ jitter and bounded exponential backoff. Never apply this guidance to a mutation
 or an uncertain session-creation outcome. Mutation failures omit Retry-After.
 The server coalesces readiness by rejecting concurrent probes and cooling down
 failed probes; it does not start a new query for every failing health request.
+
+The web client retries `STORAGE_UNAVAILABLE` and `STORAGE_OVERLOADED` reads at
+most three times. Delays use 1-second exponential backoff, a `Retry-After`
+minimum (seconds or HTTP date), and up to 25% positive jitter, capped at 30 seconds.
+If the server requests a longer wait, automatic retries stop rather than retrying
+earlier than requested. Missing or invalid hints use the exponential delay.
+Other query errors retain one retry, except 404s, which are not retried.
+`STORAGE_OUTCOME_UNCERTAIN` is never retried, including session-bootstrap GETs
+that carry `Retry-After`. Mutation retries remain explicitly disabled.

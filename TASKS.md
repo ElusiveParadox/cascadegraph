@@ -10,3 +10,4 @@
 | CG-FEEDBACK | P1 | 2 | Test with 3–5 campus developers | CG-SIM | BLOCKED | Actual participants provide feedback; none recruited yet |
 | CG-SOURCE | P0 | 3 | Public repository URL, larger ZIPs and source-file fallback | CG-CORE | DONE | 86 Python tests and real URL-only browser journey pass; protected CI requires desktop/phone source and existing workflow checks |
 | CG-STORAGE | P0 | 3 | Bound storage outage latency | CG-CORE | DONE | Shared finite process admission, hard deadlines, safe uncertain writes, isolated outage/cancellation/recovery tests |
+| CG-HISTORY-RETRY | P1 | 3 | Space history reads during storage outages | CG-STORAGE | DONE | Retry-After minimum, jitter/caps, finite retries, no uncertain-session or mutation replay; focused frontend checks |
