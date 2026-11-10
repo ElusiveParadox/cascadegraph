@@ -8,4 +8,4 @@
 | CG-VALIDATE | P0 | 2 | Three-service experiment and CI | CG-SIM | DONE | Six actual GitHub Actions scenarios compared with independent predictions |
 | CG-RELEASE | P0 | 3 | Security, documentation and release | CG-VALIDATE | USER GATE | Implementation checks and docs complete; publication needs user approval |
 | CG-FEEDBACK | P1 | 2 | Test with 3–5 campus developers | CG-SIM | BLOCKED | Actual participants provide feedback; none recruited yet |
-| CG-SOURCE | P0 | 3 | Public repository URL, larger ZIPs and source-file fallback | CG-CORE | IN REVIEW | 86 Python tests and real URL-only browser journey pass; protected GitHub checks pending |
+| CG-SOURCE | P0 | 3 | Public repository URL, larger ZIPs and source-file fallback | CG-CORE | DONE | 86 Python tests and real URL-only browser journey pass; protected CI requires desktop/phone source and existing workflow checks |

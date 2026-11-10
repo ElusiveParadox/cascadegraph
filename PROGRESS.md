@@ -75,5 +75,10 @@
   commit after reload, exported matching report provenance and deleted cleanly.
   Policies/edges still require explicit human confirmation; ingestion is not
   a claim of verified production safety.
-- Static security and privacy scans report no findings. Feature PR checks are
-  being completed before protected merge.
+- Static security and privacy scans report no findings. Feature evidence:
+  https://github.com/ElusiveParadox/cascadegraph/pull/2
+- Protected CI requires Python checks, frontend types/helpers/build plus four
+  desktop/phone browser journeys, JavaScript audit, unsafe-execution guard and
+  real six-scenario Compose validation. The source journey deliberately delays
+  initial history loading to check ownership readiness. Delete-dialog content
+  has explicit precedence over its overlay; no forced-click test bypass is used.
