@@ -12,3 +12,4 @@
 | CG-STORAGE | P0 | 3 | Bound storage outage latency | CG-CORE | DONE | Shared finite process admission, hard deadlines, safe uncertain writes, isolated outage/cancellation/recovery tests |
 | CG-HISTORY-RETRY | P1 | 3 | Space history reads during storage outages | CG-STORAGE | DONE | Retry-After minimum, jitter/caps, finite retries, no uncertain-session or mutation replay; focused frontend checks |
 | CG-DESKTOP-ACCESS | P1 | 3 | Catch desktop layout and keyboard-access regressions | CG-SOURCE | DONE | Wide/compact/200%-zoom-equivalent browser assertions cover intake, skip navigation, visible focus, active pages and local overflow; existing ownership workflows retained |
+| CG-FILE-DROP | P1 | 3 | Drag repository archives and source files into the workbench | CG-SOURCE | DONE | Shared drop feedback, atomic selection validation against server limits, retained path editing and explicit submission; desktop/phone keyboard and rejection checks |

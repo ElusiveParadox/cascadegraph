@@ -14,7 +14,7 @@ export const history: AnalysisSummary = {
   service_count: 1,
   policy_count: 0,
 };
-const status: SystemStatus = {
+export const status: SystemStatus = {
   version: "1.0.0", model_version: "layout-fixture", ai_available: false,
   ai_provider: "none", storage: "test", supported_parsers: [], limitations: [],
   max_archive_mb: 50, max_files: 2000, max_expanded_mb: 200,

@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { SourceIntake } from "@/components/source-intake";
+import { FileDropZone } from "@/components/file-drop-zone";
+import { archiveSelectionError } from "@/lib/file-intake";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
@@ -46,6 +48,7 @@ export default function Overview() {
   const [zipProject, setZipProject] = useState(".");
   const [importBusy, setImportBusy] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -71,6 +74,12 @@ export default function Overview() {
   const busy = create.isPending || upload.isPending || importBusy || !ready;
   const maxMb = status.data?.max_archive_mb;
   const tooBig = !!(file && maxMb && file.size > maxMb * 1024 * 1024);
+  const selectArchive = (incoming: File[]) => {
+    if (busy || !status.data || !incoming.length) return;
+    const error = archiveSelectionError(incoming, status.data);
+    setArchiveError(error);
+    if (!error) setFile(incoming[0]);
+  };
 
   return (
     <>
@@ -104,15 +113,20 @@ export default function Overview() {
             Analyze sample <ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
         </Panel>
-        <Panel title={<span className="flex items-center gap-2"><Archive className="h-3.5 w-3.5" />ZIP archive</span>} meta={status.data ? `≤ ${status.data.max_archive_mb} MB · ≤ ${status.data.max_files} files` : "limits loading"}>
-          <button type="button" onClick={() => fileRef.current?.click()} data-testid="button-choose-archive"
+        <Panel title={<span className="flex items-center gap-2"><Archive className="h-3.5 w-3.5" />ZIP archive</span>} meta={status.data ? `≤ ${status.data.max_archive_mb} MiB · ≤ ${status.data.max_files} files` : "limits loading"}>
+          <FileDropZone disabled={busy} onFiles={selectArchive} testId="drop-archive">
+          <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} data-testid="button-choose-archive"
             className="grid-paper flex w-full flex-col items-center gap-1 rounded-md border border-dashed border-input px-4 py-6 text-sm transition-colors hover:border-primary hover:bg-primary/[0.03]">
             <Upload className="h-4 w-4 text-muted-foreground" />
-            {file ? <span className="num">{file.name} · {(file.size / 1024).toFixed(1)} KB</span> : <span className="text-muted-foreground">Choose a .zip of your repository</span>}
+            <span className="text-muted-foreground">Choose a .zip of your repository</span>
           </button>
-          <input ref={fileRef} type="file" accept=".zip,application/zip" className="hidden" data-testid="input-archive"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          {tooBig && <p className="mt-2 text-xs text-destructive">File exceeds the {maxMb} MB server limit.</p>}
+          <input ref={fileRef} type="file" accept=".zip,application/zip" disabled={busy} className="hidden" data-testid="input-archive"
+            onChange={(e) => { selectArchive(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+          <p role="status" className="num mt-2 break-all text-xs text-muted-foreground">{file ? `${file.name} · ${(file.size / 1024).toFixed(1)} KiB selected` : "No ZIP selected."}</p>
+          {file && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { setFile(null); setArchiveError(null); }}>Remove ZIP</Button>}
+          {archiveError && <p role="alert" className="mt-2 text-xs text-destructive">{archiveError} Your previous selection is unchanged.</p>}
+          {tooBig && <p role="alert" className="mt-2 text-xs text-destructive">File exceeds the {maxMb} MiB server limit.</p>}
+          </FileDropZone>
           <label className="mt-3 block text-xs font-medium">Project folder inside ZIP <span className="font-normal text-muted-foreground">optional</span>
             <Input value={zipProject} maxLength={200} onChange={e => setZipProject(e.target.value)} placeholder="e.g. sample-app" className="num mt-1" data-testid="input-zip-project" />
           </label>

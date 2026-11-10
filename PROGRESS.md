@@ -1,5 +1,23 @@
 # Progress
 
+## Repository file drag-and-drop — 2026-11-10
+- Added file drop feedback to the existing ZIP and direct-source panels while
+  retaining native keyboard file pickers. Selecting or dropping never submits;
+  existing analysis payloads, public-snapshot supplementation, path editing and
+  unchecked AI opt-in are unchanged.
+- Rejected batches leave previous selections and edited paths intact. Extension,
+  archive count, per-source size, cumulative source count and total source size
+  checks use advertised server limits; absent optional source limits fail
+  explicitly instead of guessing. Selected file/count/size summaries, ZIP removal
+  and immediate validation errors are visible.
+- Eight focused desktop/phone browser checks passed for drag feedback, rejection,
+  size/count limits, keyboard pickers, retained selections and source payloads.
+  Three new unit tests cover exact byte/count boundaries and changed server
+  limits; all frontend unit checks pass.
+- Passed workspace typechecking, frontend build, Python tests (104 passed),
+  Python lint and whitespace checks. Build retains existing UI component
+  sourcemap warnings. Managed web/API workflows started cleanly.
+
 ## Real-server storage shutdown regression — 2026-11-10
 - Added separate Linux integration coverage through the production Uvicorn entry
   point, with an OS-selected loopback port and a per-test temporary SQLite file.
