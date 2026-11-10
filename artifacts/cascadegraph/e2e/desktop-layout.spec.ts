@@ -120,6 +120,83 @@ for (const size of sizes) {
       await expectNoPageOverflow(page);
     });
 
+    if (!size.sidebar) {
+      test("compact navigation announces its state, contains focus and closes by keyboard", async ({ page }) => {
+        await page.goto("/");
+        await expect(page.getByTestId("button-analyze-sample")).toBeEnabled();
+        const toggle = page.getByTestId("button-mobile-nav");
+        await expect(toggle).toHaveAttribute("aria-expanded", "false");
+        const controlledId = await toggle.getAttribute("aria-controls");
+        expect(controlledId).toBeTruthy();
+        const overlay = page.locator(`[id="${controlledId}"]`);
+        await expect(overlay).toBeHidden();
+        await page.keyboard.press("Tab"); // Skip link.
+        await page.keyboard.press("Tab");
+        await expectKeyboardFocus(toggle);
+        await page.keyboard.press("Enter");
+        await expect(toggle).toHaveAttribute("aria-expanded", "true");
+        await expect(overlay).toBeVisible();
+        const brand = overlay.getByTestId("link-brand");
+        const home = overlay.getByTestId("link-nav-home");
+        const validation = overlay.getByTestId("link-nav-validation");
+        const help = overlay.getByTestId("link-nav-help");
+        await expectKeyboardFocus(brand);
+        await page.keyboard.press("Tab");
+        await expectKeyboardFocus(home);
+        await page.keyboard.press("Tab"); // Disabled analysis links are not stops.
+        await expectKeyboardFocus(validation);
+        await page.keyboard.press("Tab");
+        await expectKeyboardFocus(help);
+        await page.keyboard.press("Tab"); // Wrap, never reach the covered intake.
+        await expectKeyboardFocus(toggle);
+        await page.keyboard.press("Shift+Tab");
+        await expectKeyboardFocus(help);
+        await page.keyboard.press("Tab");
+        await page.keyboard.press("Tab");
+        await expectKeyboardFocus(brand);
+        await page.keyboard.press("Escape");
+        await expect(overlay).toBeHidden();
+        await expect(toggle).toHaveAttribute("aria-expanded", "false");
+        await expectKeyboardFocus(toggle);
+        await page.keyboard.press("Tab");
+        await expectKeyboardFocus(page.getByTestId("input-repository-url"));
+        // Reopening must install a fresh loop; the toggle can also close it.
+        await page.keyboard.press("Shift+Tab");
+        await page.keyboard.press("Space");
+        await expectKeyboardFocus(brand);
+        await page.keyboard.press("Shift+Tab");
+        await expectKeyboardFocus(toggle);
+        await page.keyboard.press("Enter");
+        await expect(toggle).toHaveAttribute("aria-expanded", "false");
+        await expectKeyboardFocus(toggle);
+        // Route changes close the overlay and restore focus, including same-route links.
+        await page.keyboard.press("Enter");
+        await page.keyboard.press("Tab");
+        await page.keyboard.press("Enter");
+        await expect(overlay).toBeHidden();
+        await expectKeyboardFocus(toggle);
+        await page.keyboard.press("Enter");
+        await page.keyboard.press("Shift+Tab");
+        await page.keyboard.press("Shift+Tab");
+        await expectKeyboardFocus(help);
+        await page.keyboard.press("Enter");
+        await expect(page).toHaveURL(/\/help$/);
+        await expect(toggle).toHaveAttribute("aria-expanded", "false");
+        await expectKeyboardFocus(toggle);
+        // Switching to the persistent sidebar must remove the compact focus trap.
+        await page.keyboard.press("Enter");
+        await page.setViewportSize({ width: 1024, height: 768 });
+        await expect(toggle).toHaveAttribute("aria-expanded", "false");
+        await expect(page.locator("aside")).toBeVisible();
+        await page.getByRole("link", { name: "Skip to content" }).focus();
+        await page.keyboard.press("Enter");
+        await expect(page.getByRole("main")).toBeFocused();
+        await page.setViewportSize(size.viewport);
+        await expect(toggle).toHaveAttribute("aria-expanded", "false");
+        await expect(overlay).toBeHidden();
+      });
+    }
+
     test("history and evidence overflow locally without widening the page", async ({ page }) => {
       await page.goto("/");
       const row = page.getByTestId(`row-analysis-${history.id}`);

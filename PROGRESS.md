@@ -1,5 +1,24 @@
 # Progress
 
+## Compact navigation keyboard containment — 2026-11-10
+- Added expanded/control announcements, focus entry and a bidirectional loop over
+  the compact toggle and enabled navigation links. Covered intake and skip-link
+  content is inert while navigation is open.
+- Escape, the toggle and link activation close navigation and restore toggle
+  focus. Switching to the persistent desktop sidebar removes the focus trap
+  without trying to focus its now-hidden toggle.
+- Extended the existing desktop-layout suite: **10 passed**, including explicit
+  state, visible focus, disabled-link skipping, forward/reverse wrap, Escape,
+  reopen, same-route and changed-route dismissal, and desktop resize assertions.
+  Zoom coverage is reduced-CSS-viewport/double-density reflow emulation, not
+  native browser-UI zoom. Fixtures remain presentation-only; no ownership,
+  analysis or intake behavior changes.
+- Passed `pnpm run typecheck`, frontend unit checks,
+  `uv run --frozen ruff check src tests`, `uv run --frozen pytest` (**104 passed**)
+  and `git diff --check`. Browser command:
+  `E2E_API_PORT=28080 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/repl/tools/bin/chromium
+  pnpm --filter @workspace/cascadegraph test:e2e --project=desktop-layout`.
+
 ## Repository file drag-and-drop — 2026-11-10
 - Added file drop feedback to the existing ZIP and direct-source panels while
   retaining native keyboard file pickers. Selecting or dropping never submits;

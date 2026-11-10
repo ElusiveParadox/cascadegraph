@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { BookOpen, FileText, FlaskConical, GitCompare, Home, Network, ShieldCheck, SlidersHorizontal, Menu, X } from "lucide-react";
 import { useGetSystemStatus } from "@workspace/api-client-react";
@@ -20,8 +20,52 @@ export function Shell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const sel = useSelection();
   const [open, setOpen] = useState(false);
+  const navigationId = useId();
+  const compactNavigation = useRef<HTMLDivElement>(null);
+  const navigationToggle = useRef<HTMLButtonElement>(null);
   const status = useGetSystemStatus();
   useEffect(() => setOpen(false), [location]);
+  useEffect(() => {
+    if (!open) return;
+    const container = compactNavigation.current!;
+    const toggle = navigationToggle.current!;
+    const desktop = window.matchMedia("(min-width: 768px)");
+    const links = () => Array.from(container.querySelectorAll<HTMLAnchorElement>("a[href]"));
+    // The close toggle stays in the focus loop alongside the enabled links.
+    const focusable = () => [toggle, ...links()];
+    const focusFirstLink = () => (links()[0] ?? toggle).focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+      } else if (event.key === "Tab") {
+        const targets = focusable();
+        const index = targets.indexOf(document.activeElement as HTMLButtonElement | HTMLAnchorElement);
+        if (index === -1 || (!event.shiftKey && index === targets.length - 1) || (event.shiftKey && index === 0)) {
+          event.preventDefault();
+          (event.shiftKey ? targets[targets.length - 1] : targets[0]).focus();
+        }
+      }
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      if (!container.contains(event.target as Node)) focusFirstLink();
+    };
+    const onResize = () => {
+      if (desktop.matches) setOpen(false);
+    };
+    focusFirstLink();
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("focusin", onFocusIn);
+    desktop.addEventListener("change", onResize);
+    onResize();
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("focusin", onFocusIn);
+      desktop.removeEventListener("change", onResize);
+      // Never return focus to the hidden compact toggle on a desktop resize.
+      if (!desktop.matches) toggle.focus();
+    };
+  }, [open]);
   const a = sel.analysisId;
   const s = sel.simulationId;
   const items: { href: string | null; label: string; icon: typeof Home; match: string; hint?: string }[] = [
@@ -90,14 +134,19 @@ export function Shell({ children }: { children: ReactNode }) {
   );
   return (
     <div className="min-h-[100dvh] bg-background md:grid md:grid-cols-[248px_1fr]">
-      <a href="#workspace-content" className="fixed left-4 top-4 z-50 -translate-y-24 rounded-md bg-primary px-4 py-2 text-primary-foreground shadow-lg focus:translate-y-0">Skip to content</a>
+      <a href="#workspace-content" inert={open} className="fixed left-4 top-4 z-50 -translate-y-24 rounded-md bg-primary px-4 py-2 text-primary-foreground shadow-lg focus:translate-y-0">Skip to content</a>
       <aside className="sticky top-0 hidden h-[100dvh] md:block">{side}</aside>
-      <div className="flex items-center justify-between bg-sidebar px-4 py-3 text-sidebar-foreground md:hidden">
-        <span className="font-display">CascadeGraph</span>
-        <button onClick={() => setOpen(!open)} aria-label="Toggle navigation" data-testid="button-mobile-nav">{open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button>
+      <div ref={compactNavigation} className="md:hidden">
+        <div className="flex items-center justify-between bg-sidebar px-4 py-3 text-sidebar-foreground">
+          <span className="font-display">CascadeGraph</span>
+          <button ref={navigationToggle} onClick={() => setOpen(!open)} aria-label="Toggle navigation" aria-expanded={open} aria-controls={navigationId} data-testid="button-mobile-nav">{open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button>
+        </div>
+        <div id={navigationId} hidden={!open} className="fixed inset-x-0 top-12 bottom-0 z-40"
+          onClick={event => { if ((event.target as HTMLElement).closest("a[href]")) setOpen(false); }}>
+          {open && side}
+        </div>
       </div>
-      {open && <div className="fixed inset-x-0 top-12 bottom-0 z-40 md:hidden">{side}</div>}
-      <main id="workspace-content" tabIndex={-1} className="min-w-0 px-4 py-6 md:px-10 md:py-10"><div className="mx-auto max-w-[1320px] space-y-7">{children}</div></main>
+      <main id="workspace-content" inert={open} tabIndex={-1} className="min-w-0 px-4 py-6 md:px-10 md:py-10"><div className="mx-auto max-w-[1320px] space-y-7">{children}</div></main>
     </div>
   );
 }
