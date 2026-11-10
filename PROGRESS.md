@@ -1,5 +1,21 @@
 # Progress
 
+## Real-server storage shutdown regression — 2026-11-10
+- Added separate Linux integration coverage through the production Uvicorn entry
+  point, with an OS-selected loopback port and a per-test temporary SQLite file.
+  Test-only, spawn-safe faults block immediately before or after a real commit.
+- Verified real HTTP uncertain-write responses, caller disconnect while a known
+  database child is blocked, and real SIGTERM to only the isolated server process.
+  Asserted the one-second storage shutdown budget separately from HTTP draining,
+  clean lifespan completion, and no surviving process-group members or DB child.
+- Restarted against the same temporary database and recovered original records
+  with the original cookie. Exact history reconciles committed/uncommitted writes;
+  invocation counts rule out transparent replay, and foreign owners remain denied.
+- Executed `uv run --frozen pytest -q`: **104 passed**.
+  `uv run --frozen ruff check src tests`, `pnpm run typecheck`,
+  `pnpm --filter @workspace/cascadegraph test`, and `git diff --check` passed.
+  No production code, managed preview process or shared database was changed.
+
 ## Imported preview startup repair — 2026-11-10
 - Startup logs showed `vite: not found` because JavaScript dependencies were
   absent. Restored them using the unchanged frozen pnpm lockfile and restarted

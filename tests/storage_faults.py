@@ -1,8 +1,15 @@
 """Lightweight spawn-safe fault injection; do not import the ASGI application."""
 
+import os
 import sqlite3
 import time
 from pathlib import Path
+
+
+def tracked_fault(function, args, stage, marker, calls, worker):
+    """Identify the actual database child, not multiprocessing's resource tracker."""
+    Path(worker).write_text(str(os.getpid()))
+    return fault(function, args, stage, marker, calls)
 
 
 def fault(function, args, stage, marker, calls):
