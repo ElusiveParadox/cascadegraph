@@ -35,5 +35,5 @@ under the same two-slot analysis limit. Upload reads and GitHub requests time ou
 
 Analysis responses include optional `repository` provenance and `requested_files`
 guidance. Missing/ambiguous input produces a partial analysis, not invented edges
-or retry values. A corrected source submission creates a new immutable analysis;
+or retry values. A corrected source submission creates a new analysis with fixed source provenance;
 raw source is not stored for later recomputation.

@@ -25,9 +25,22 @@ edges:
 
 test("missing source guidance leads to a complete files-only analysis", async ({ page }) => {
   const owned: string[] = [];
+  let releaseHistory!: () => void;
+  const historyGate = new Promise<void>(resolve => { releaseHistory = resolve; });
+  let firstHistory = true;
+  await page.route("**/api/v1/analyses", async route => {
+    if (route.request().method() === "GET" && firstHistory) {
+      firstHistory = false;
+      await historyGate;
+    }
+    await route.continue();
+  });
   try {
     await page.goto("/");
     await expect(page.getByTestId("form-source-intake")).toBeVisible();
+    await expect(page.getByTestId("button-analyze-repository")).toBeDisabled();
+    await expect(page.getByTestId("button-analyze-sample")).toBeDisabled();
+    releaseHistory();
     await page.getByTestId("input-source-files").setInputFiles({
       name: "client.py", mimeType: "text/plain", buffer: Buffer.from(clientSource),
     });
@@ -56,6 +69,7 @@ test("missing source guidance leads to a complete files-only analysis", async ({
     expect(result.source_type).toBe("source_files");
     expect(result.edges[0].policy_ids).toHaveLength(1);
   } finally {
+    releaseHistory();
     for (const id of owned) await page.request.delete(`/api/v1/analyses/${id}`);
   }
 });

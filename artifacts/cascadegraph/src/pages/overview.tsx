@@ -66,7 +66,9 @@ export default function Overview() {
       onError: (e) => toast({ title: "Delete failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" }),
     },
   });
-  const busy = create.isPending || upload.isPending || importBusy;
+  // Settle both initial cookie-setting reads before creating session-owned data.
+  const ready = list.isSuccess && status.isSuccess;
+  const busy = create.isPending || upload.isPending || importBusy || !ready;
   const maxMb = status.data?.max_archive_mb;
   const tooBig = !!(file && maxMb && file.size > maxMb * 1024 * 1024);
 
@@ -76,7 +78,7 @@ export default function Overview() {
         Point CascadeGraph at service source. It extracts retry policies with file and line evidence, builds the call graph, and replays seeded failure scenarios so you can compare a baseline against a candidate policy.
       </PageHeader>
 
-      {busy && (
+      {(create.isPending || upload.isPending || importBusy) && (
         <div className="rise relative overflow-hidden rounded-md border border-primary/40 bg-primary/5 p-4" role="status" data-testid="status-processing">
           <div className="text-sm font-semibold">Analyzing {create.isPending ? "bundled sample" : importBusy ? "repository / source files" : file?.name}</div>
           <div className="mt-0.5 text-xs text-muted-foreground">Parsing runs synchronously within a bounded file and size budget. The result appears when the request returns; there is no partial progress to report.</div>
@@ -85,8 +87,11 @@ export default function Overview() {
       )}
       {create.isError && <ErrorPanel error={create.error} title="Sample analysis failed" />}
       {upload.isError && <ErrorPanel error={upload.error} title="Archive analysis failed" />}
+      {!ready && (status.isError || list.isError
+        ? <ErrorPanel error={status.error ?? list.error} title="Workspace could not be initialized" onRetry={() => { status.refetch(); list.refetch(); }} />
+        : <p role="status" className="text-xs text-muted-foreground">Preparing browser session and server limits…</p>)}
 
-      <SourceIntake limits={status.data} disabled={create.isPending || upload.isPending} onBusyChange={setImportBusy} onAnalyzed={onCreated}
+      <SourceIntake limits={status.data} disabled={create.isPending || upload.isPending || !ready} onBusyChange={setImportBusy} onAnalyzed={onCreated}
         initialRepository={parameters.get("repository") ?? ""} initialRef={parameters.get("ref") ?? ""} initialProject={parameters.get("project") ?? "."} />
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
