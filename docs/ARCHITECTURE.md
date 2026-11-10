@@ -2,8 +2,10 @@
 
 The pnpm workspace contains the React artifact, an API specification, generated
 React-query/Zod helpers and dormant Express/database scaffolds. The actual
-backend is Python FastAPI under `src/cascadegraph_runtime`; SQLite is accessed
-directly with parameterized SQL. SQLAlchemy and PostgreSQL are unnecessary here.
+backend is Python FastAPI under `src/cascadegraph_runtime`. PostgreSQL stores
+normalized JSONB snapshots using parameterized psycopg queries and a bounded
+lifecycle-owned async pool. SQLite remains an explicit isolated local/test mode.
+The TypeScript database scaffold is not a second authoritative persistence layer.
 
 Data flow: bounded in-memory ZIP/sample files → safe YAML/Python AST parsers →
 normalized source-evidenced policies/graph → persisted redacted analysis →
@@ -18,5 +20,6 @@ ingestion endpoint; maintainers review provenance before bundling safe metrics.
 
 The single-process demo bounds body size, entries, source sizes, nodes, edges,
 policies, requests, queue sizes, event count, sessions, saved runs and job
-concurrency. This intentionally is not a distributed job system. A durable
-multi-user deployment requires a separately approved storage/auth architecture.
+concurrency. This intentionally is not a distributed job system. PostgreSQL
+does not introduce private-team authentication, account recovery or distributed
+rate limiting. Analyses still expire after 24 hours.

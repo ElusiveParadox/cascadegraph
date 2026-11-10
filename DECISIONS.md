@@ -1,5 +1,29 @@
 # Engineering decisions
 
+## ADR-011 — PostgreSQL live storage (2026-11-10)
+Accepted at the user's explicit request. The current two-process SQLite executor
+rejects concurrent browser reads and spawns a new interpreter for every operation.
+Use the existing managed PostgreSQL database through a lifecycle-owned async
+psycopg pool instead. Alternatives were increasing SQLite worker limits (retains
+filesystem durability and process overhead issues) or moving the backend to
+TypeScript (unnecessary disruption); both were rejected.
+
+Bound the pool, acquisition wait, database statements and lock waits. Never
+automatically retry writes; a failed commit response remains an uncertain outcome.
+Retain anonymous owners, cookie scope, 24-hour retention, quotas, cascading
+deletion, normalized JSON snapshots and original simulation provenance.
+PostgreSQL changes persistence, not authentication or model accuracy.
+
+An explicit SQLite file remains available for isolated local/tests only. Once
+PostgreSQL is selected, an outage must not fall back to SQLite or invent an owner.
+Apply schema to development explicitly/from post-merge; Replit Publish owns the
+production schema diff. No API startup or production build DDL is allowed.
+Copy unexpired local data transactionally with unchanged session tokens and IDs;
+leave the source file untouched and reject conflicts rather than overwrite.
+Local SQLite uses a clean forkserver where supported (spawn otherwise), avoiding
+per-operation interpreter startup overrunning existing fault-test budgets.
+Neither mode inherits application pool connections.
+
 ## ADR-001 — Python computational core (2026-11-10)
 Accepted. FastAPI/Pydantic and Python AST/safe YAML implement the analysis engine;
 React/Vite renders it through the shared path proxy. This preserves the requested
@@ -71,3 +95,39 @@ skipped before per-source checks but still count toward declared archive limits.
 Acquire two-slot admission before buffering, bound waiting and upload reads, and
 keep small JSON routes at 64 KiB. This trades general large-repository coverage
 for predictable demo resource use; large/private applications can supply a subset.
+
+## ADR-011 — Hard-bounded SQLite execution and uncertain writes (2026-11-10)
+Accepted. The actual checkout has SQLite, not the newer storage/credential
+modules mentioned in an external plan. Preserve that backend; do not create a
+vault, async pool, migration, fallback store or background-job system.
+
+Use at most two spawned, dedicated storage processes and zero queued jobs.
+Unlike a thread executor, a process can be terminated if filesystem acquisition,
+connect or commit ignores a SQLite VM interrupt. All HTTP storage callers share
+this admission, including middleware and async analysis saves; unrelated health
+and validation requests never enter it. Per-call process creation has overhead,
+accepted for this small demo in exchange for explicit ownership and cancellation.
+
+Budgets: immediate overload rejection; SQLite busy timeout 100 ms, transaction
+400 ms (100-instruction progress checks plus pre-commit check); whole operation
+800 ms including spawn/connect/commit; TERM/reap 200 ms then KILL/reap 200 ms;
+shutdown 1 second. Admission stays occupied until the worker actually exits.
+No queued mutation can start after cancellation because there is no queue.
+Connections close on normal errors; killed processes release handles and SQLite
+journaling handles rollback/recovery. No transparent mutation retries.
+Uninterruptible kernel I/O is an OS boundary: report failed shutdown explicitly,
+never release accounting and pretend the worker stopped.
+
+BEGIN IMMEDIATE serializes ownership/quota checks and writes, including session
+creation and simulation-parent checks. Existing opportunistic retention remains
+inside normal transactions; there is no new retention scheduler. Readiness is
+read-only, one probe at a time with a 500 ms failure cooldown. Liveness bypasses
+sessions, storage and client rate limits. Startup initialization is bounded and
+nonfatal so a storage outage cannot suppress liveness.
+
+503 errors have safe codes, correlation IDs and no-store headers, with no cookie
+changes. A deadline/lost worker/commit exception may follow a committed mutation:
+report STORAGE_OUTCOME_UNCERTAIN and require history reconciliation, not replay.
+Read/health retries wait at least 2 seconds with jitter and bounded exponential
+backoff; mutation responses never include retry guidance. Tests use temporary
+SQLite files and spawn-local fault injection, never a shared database outage.

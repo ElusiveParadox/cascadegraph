@@ -10,12 +10,26 @@ jobs:
     name: Python tests and lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cascadegraph
+          POSTGRES_PASSWORD: cascadegraph_ci
+          POSTGRES_DB: cascadegraph_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cascadegraph -d cascadegraph_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://cascadegraph:cascadegraph_ci@127.0.0.1:5432/cascadegraph_test
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
         with:
           version: "0.13.4"
       - run: uv sync --frozen
+      - run: uv run --frozen python -m cascadegraph_runtime.setup_database
       - run: uv run --frozen ruff check src tests
       - run: uv run --frozen pytest -q
         env:
@@ -24,6 +38,19 @@ jobs:
     name: Frontend types tests build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cascadegraph
+          POSTGRES_PASSWORD: cascadegraph_ci
+          POSTGRES_DB: cascadegraph_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cascadegraph -d cascadegraph_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://cascadegraph:cascadegraph_ci@127.0.0.1:5432/cascadegraph_test
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -33,6 +60,7 @@ jobs:
         with:
           version: "0.13.4"
       - run: uv sync --frozen
+      - run: uv run --frozen python -m cascadegraph_runtime.setup_database
       - run: corepack enable && corepack prepare pnpm@10.26.1 --activate
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @workspace/api-spec run codegen

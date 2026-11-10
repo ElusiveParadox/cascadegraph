@@ -23,7 +23,7 @@ export default function ReportPage() {
   };
   return (
     <>
-      <PageHeader kicker={`05 / report · schema ${r.schema_version}`} title={`Evidence report: ${a.name}`}
+      <PageHeader kicker={`report · schema ${r.schema_version}`} title={`Evidence report: ${a.name}`}
         actions={<Button size="sm" onClick={download} data-testid="button-download-report"><Download className="mr-1.5 h-4 w-4" />Download JSON</Button>}>
         <span className="num text-xs">generated {fmtDate(r.generated_at)} · fingerprint {a.fingerprint.slice(0, 16)}</span>
       </PageHeader>

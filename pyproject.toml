@@ -9,6 +9,7 @@ dependencies = [
     "hypothesis>=6.170.15",
     "itsdangerous>=2.2.0",
     "openai>=3.49.0",
+    "psycopg[binary,pool]>=3.3.8",
     "pydantic>=2.14.3",
     "pytest>=9.2.0",
     "python-multipart>=0.0.33",

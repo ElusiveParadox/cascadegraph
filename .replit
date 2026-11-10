@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "python-base-3.13"]
+modules = ["web", "python-base-3.13", "nodejs-24", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -21,4 +21,4 @@ timeoutMs = 180000
 
 [nix]
 channel = "stable-25_05"
-packages = ["libxcrypt", "libyaml"]
+packages = ["libxcrypt", "libyaml", "postgresql"]

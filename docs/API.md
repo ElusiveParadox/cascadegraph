@@ -37,3 +37,65 @@ Analysis responses include optional `repository` provenance and `requested_files
 guidance. Missing/ambiguous input produces a partial analysis, not invented edges
 or retry values. A corrected source submission creates a new analysis with fixed source provenance;
 raw source is not stored for later recomputation.
+
+## Storage availability and health
+
+The execution checkout uses SQLite only (no credential vault, async database pool,
+or alternate storage). Every HTTP database call, including session validation and
+analysis persistence, uses the same dedicated process admission:
+
+| Limit | Budget |
+|---|---|
+| Running storage calls per server process | 2 |
+| Waiting queue / admission wait | 0 / immediate 503 when full |
+| SQLite connection lock wait (`timeout` / busy timeout) | 100 ms |
+| SQLite transaction / VM operation deadline | 400 ms, progress check every 100 VM instructions; check again before commit |
+| Entire execution, including process start, acquisition/connect and commit | 800 ms |
+| Stop/reap after deadline or cancellation | 200 ms TERM grace + 200 ms KILL/reap |
+| Shutdown | 1 second to stop admission, terminate active workers and drain |
+| Readiness | 1 in flight; 500 ms failure cooldown (including overload) |
+
+These are storage-call budgets, not analysis/upload deadlines. A request can
+perform session resolution plus separate read/write calls; existing 90-second
+analysis and 30-second body-read limits still apply. No work waits in a database
+queue. Spawned workers own their connections and transactions; killed SQLite
+writers recover through SQLite's journal, not an application retry. Capacity is
+held until the worker is reaped. On pathological uninterruptible kernel I/O,
+reaping cannot be guaranteed by user-space code: shutdown fails explicitly and
+retains accounting instead of falsely reporting a drained worker.
+
+`GET /healthz` and `/v1/health/live` always bypass database/session/rate checks and
+never create or refresh cookies. `/v1/health/ready` is a read-only, bounded query
+of the existing schema: no session, DDL, retention cleanup or fallback. Startup
+attempts bounded schema initialization but still serves liveness if it fails.
+A new inaccessible/uninitialized database remains unready until initialization
+succeeds through a normal history/session request. `/v1/validation` is also
+storage-independent; `/v1/status` retains its existing session-bootstrap behavior.
+
+Storage failures return **503**, `Cache-Control: no-store`, `X-Correlation-ID`,
+and `{error, code, correlation_id}`. Codes are `STORAGE_UNAVAILABLE`,
+`STORAGE_OVERLOADED` (both slots occupied), or `STORAGE_OUTCOME_UNCERTAIN`.
+Availability failures do not imply an absent owner: never replace, clear,
+refresh or create an owner cookie on a storage-error response. The original
+cookie continues to authorize the original records after recovery.
+
+A write interrupted while running, a worker lost before returning its result,
+or a commit error can have an **uncertain outcome**: the mutation may already be
+durable. Do not describe it as rolled back or blindly replay it. Check history
+after recovery and reconcile manually. There are no automatic mutation retries,
+idempotency guarantees, storage failovers or fallback sessions.
+
+Read/health failures include `Retry-After: 2`; wait at least two seconds, add
+jitter and bounded exponential backoff. Never apply this guidance to a mutation
+or an uncertain session-creation outcome. Mutation failures omit Retry-After.
+The server coalesces readiness by rejecting concurrent probes and cooling down
+failed probes; it does not start a new query for every failing health request.
+
+The web client retries `STORAGE_UNAVAILABLE` and `STORAGE_OVERLOADED` reads at
+most three times. Delays use 1-second exponential backoff, a `Retry-After`
+minimum (seconds or HTTP date), and up to 25% positive jitter, capped at 30 seconds.
+If the server requests a longer wait, automatic retries stop rather than retrying
+earlier than requested. Missing or invalid hints use the exponential delay.
+Other query errors retain one retry, except 404s, which are not retried.
+`STORAGE_OUTCOME_UNCERTAIN` is never retried, including session-bootstrap GETs
+that carry `Retry-After`. Mutation retries remain explicitly disabled.

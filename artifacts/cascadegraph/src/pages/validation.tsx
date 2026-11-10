@@ -6,7 +6,7 @@ export default function ValidationPage() {
   const q = useGetValidation();
   return (
     <>
-      <PageHeader kicker="06 / validation" title="Measured accuracy">
+      <PageHeader kicker="validation" title="Measured accuracy">
         The simulator is compared in CI against a real retry harness. This page reports exactly what CI recorded: if no run exists, it says so.
       </PageHeader>
       <Panel title="CI measurement">

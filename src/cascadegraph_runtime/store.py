@@ -4,20 +4,44 @@ import json
 import os
 import secrets
 import sqlite3
+import time
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from .security import ROOT
+from .storage_execution import StorageUncertain
+
+LOCK_SECONDS = 0.1
+TRANSACTION_SECONDS = 0.4
+
+
+def uses_postgres():
+    # An explicit SQLite path is the isolated local/test override. A configured
+    # PostgreSQL failure must never silently fall back to a different database.
+    return bool(os.getenv("DATABASE_URL")) and not os.getenv("CASCADEGRAPH_DB_PATH")
+
+
+def storage_description():
+    if uses_postgres():
+        return "PostgreSQL · session-owned · 24-hour retention"
+    return "SQLite · session-owned · 24-hour retention · ephemeral local storage"
+
+
+def database_path():
+    return Path(os.getenv("CASCADEGRAPH_DB_PATH", str(ROOT / "cascadegraph.sqlite3")))
 
 
 @contextmanager
 def database():
-    path = Path(os.getenv("CASCADEGRAPH_DB_PATH", str(ROOT / "cascadegraph.sqlite3")))
-    db = sqlite3.connect(path, timeout=5)
-    db.row_factory = sqlite3.Row
-    db.execute("PRAGMA foreign_keys=ON")
-    db.executescript("""
+    deadline = time.monotonic() + TRANSACTION_SECONDS
+    db = sqlite3.connect(database_path(), timeout=LOCK_SECONDS)
+    try:
+        db.set_progress_handler(lambda: int(time.monotonic() >= deadline), 100)
+        db.row_factory = sqlite3.Row
+        db.execute("PRAGMA foreign_keys=ON")
+        db.execute("BEGIN IMMEDIATE")
+        schema = """
         CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS analyses (
           id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -26,16 +50,51 @@ def database():
           id TEXT PRIMARY KEY, analysis_id TEXT NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
           data TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS analyses_owner ON analyses(owner);
-    """)
-    now = datetime.now(UTC).isoformat()
-    db.execute("DELETE FROM analyses WHERE expires_at < ?", (now,))
-    db.execute("DELETE FROM sessions WHERE created_at < ?", ((datetime.now(UTC) - timedelta(hours=25)).isoformat(),))
-    db.commit()
-    try:
+        """
+        # executescript implicitly commits; individual DDL preserves atomic quotas.
+        for statement in schema.split(";"):
+            if statement.strip():
+                db.execute(statement)
+        now = datetime.now(UTC).isoformat()
+        db.execute("DELETE FROM analyses WHERE expires_at < ?", (now,))
+        db.execute("DELETE FROM sessions WHERE created_at < ?", ((datetime.now(UTC) - timedelta(hours=25)).isoformat(),))
         yield db
-        db.commit()
+        if time.monotonic() >= deadline:
+            raise sqlite3.OperationalError("Operation deadline")
+        try:
+            db.commit()
+        except Exception:
+            raise StorageUncertain() from None
+    finally:
+        # Close rolls back an uncommitted transaction, including setup failures.
+        db.close()
+
+
+def initialize():
+    with database():
+        pass
+
+
+def probe():
+    # No schema creation, cleanup, sessions, or write locks on readiness.
+    db = sqlite3.connect(f"{database_path().absolute().as_uri()}?mode=ro", uri=True, timeout=LOCK_SECONDS)
+    deadline = time.monotonic() + TRANSACTION_SECONDS
+    try:
+        db.set_progress_handler(lambda: int(time.monotonic() >= deadline), 100)
+        db.execute("SELECT id FROM sessions LIMIT 1").fetchone()
     finally:
         db.close()
+
+
+def resolve_session(token):
+    with database() as db:
+        if token and db.execute("SELECT 1 FROM sessions WHERE id=?", (token,)).fetchone():
+            return token, False
+        if db.execute("SELECT count(*) FROM sessions").fetchone()[0] >= 5000:
+            raise ValueError("Demo session capacity reached; retry after retention cleanup")
+        token = secrets.token_urlsafe(32)
+        db.execute("INSERT INTO sessions VALUES (?,?)", (token, datetime.now(UTC).isoformat()))
+        return token, True
 
 
 def create_session() -> str:
@@ -80,19 +139,19 @@ def delete_analysis(owner, aid):
 
 
 def save_simulation(owner, data):
-    if not get_analysis(owner, data["analysis_id"]):
-        raise PermissionError("Analysis unavailable")
     with database() as db:
+        if not db.execute("SELECT 1 FROM analyses WHERE id=? AND owner=?", (data["analysis_id"], owner)).fetchone():
+            raise PermissionError("Analysis unavailable")
         if db.execute("SELECT count(*) FROM simulations WHERE analysis_id=?", (data["analysis_id"],)).fetchone()[0] >= 20:
             raise ValueError("Simulation limit of 20 per analysis reached")
         db.execute("INSERT INTO simulations VALUES (?,?,?)", (data["id"], data["analysis_id"], json.dumps(data)))
 
 
 def simulations(owner, aid):
-    if not get_analysis(owner, aid):
-        return []
     with database() as db:
-        return [json.loads(r["data"]) for r in db.execute("SELECT data FROM simulations WHERE analysis_id=? ORDER BY rowid", (aid,))]
+        return [json.loads(r["data"]) for r in db.execute(
+            """SELECT s.data FROM simulations s JOIN analyses a ON a.id=s.analysis_id
+            WHERE a.id=? AND a.owner=? ORDER BY s.rowid""", (aid, owner))]
 
 
 def get_simulation(owner, sid):

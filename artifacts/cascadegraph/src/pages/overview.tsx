@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { SourceIntake } from "@/components/source-intake";
+import { FileDropZone } from "@/components/file-drop-zone";
+import { archiveSelectionError } from "@/lib/file-intake";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
@@ -18,7 +20,7 @@ import { fmtDate, readSelection, writeSelection } from "@/lib/workspace";
 
 function AiOptIn({ id, checked, onChange, available }: { id: string; checked: boolean; onChange: (v: boolean) => void; available: boolean | undefined }) {
   return (
-    <div className="rounded-sm border border-dashed border-border bg-muted/40 p-3">
+    <div className="rounded-md border border-dashed border-input/70 bg-muted/50 p-3.5">
       <label htmlFor={id} className="flex items-start gap-2.5 text-sm">
         <Checkbox id={id} checked={checked} disabled={!available} onCheckedChange={(v) => onChange(v === true)} data-testid={`checkbox-${id}`} className="mt-0.5" />
         <span>
@@ -46,6 +48,7 @@ export default function Overview() {
   const [zipProject, setZipProject] = useState(".");
   const [importBusy, setImportBusy] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -71,10 +74,16 @@ export default function Overview() {
   const busy = create.isPending || upload.isPending || importBusy || !ready;
   const maxMb = status.data?.max_archive_mb;
   const tooBig = !!(file && maxMb && file.size > maxMb * 1024 * 1024);
+  const selectArchive = (incoming: File[]) => {
+    if (busy || !status.data || !incoming.length) return;
+    const error = archiveSelectionError(incoming, status.data);
+    setArchiveError(error);
+    if (!error) setFile(incoming[0]);
+  };
 
   return (
     <>
-      <PageHeader kicker="00 / overview" title="Where do your retries multiply?">
+      <PageHeader kicker="overview" title="Where do your retries multiply?">
         Point CascadeGraph at service source. It extracts retry policies with file and line evidence, builds the call graph, and replays seeded failure scenarios so you can compare a baseline against a candidate policy.
       </PageHeader>
 
@@ -91,10 +100,11 @@ export default function Overview() {
         ? <ErrorPanel error={status.error ?? list.error} title="Workspace could not be initialized" onRetry={() => { status.refetch(); list.refetch(); }} />
         : <p role="status" className="text-xs text-muted-foreground">Preparing browser session and server limits…</p>)}
 
-      <SourceIntake limits={status.data} disabled={create.isPending || upload.isPending || !ready} onBusyChange={setImportBusy} onAnalyzed={onCreated}
-        initialRepository={parameters.get("repository") ?? ""} initialRef={parameters.get("ref") ?? ""} initialProject={parameters.get("project") ?? "."} />
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,1fr)]">
+        <SourceIntake limits={status.data} disabled={create.isPending || upload.isPending || !ready} onBusyChange={setImportBusy} onAnalyzed={onCreated}
+          initialRepository={parameters.get("repository") ?? ""} initialRef={parameters.get("ref") ?? ""} initialProject={parameters.get("project") ?? "."} />
 
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-2 xl:grid-cols-1">
         <Panel title={<span className="flex items-center gap-2"><Box className="h-3.5 w-3.5" />Bundled sample</span>} meta="no upload">
           <p className="text-sm text-muted-foreground">A small multi-service repository with known retry layering. Useful to learn the workflow before uploading your own code.</p>
           <div className="mt-3"><AiOptIn id="sample-ai" checked={sampleAi} onChange={setSampleAi} available={status.data?.ai_available} /></div>
@@ -103,15 +113,20 @@ export default function Overview() {
             Analyze sample <ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
         </Panel>
-        <Panel title={<span className="flex items-center gap-2"><Archive className="h-3.5 w-3.5" />ZIP archive</span>} meta={status.data ? `≤ ${status.data.max_archive_mb} MB · ≤ ${status.data.max_files} files` : "limits loading"}>
-          <button type="button" onClick={() => fileRef.current?.click()} data-testid="button-choose-archive"
-            className="grid-paper flex w-full flex-col items-center gap-1 rounded-sm border border-dashed border-border px-4 py-5 text-sm transition-colors hover:border-primary">
+        <Panel title={<span className="flex items-center gap-2"><Archive className="h-3.5 w-3.5" />ZIP archive</span>} meta={status.data ? `≤ ${status.data.max_archive_mb} MiB · ≤ ${status.data.max_files} files` : "limits loading"}>
+          <FileDropZone disabled={busy} onFiles={selectArchive} testId="drop-archive">
+          <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} data-testid="button-choose-archive"
+            className="grid-paper flex w-full flex-col items-center gap-1 rounded-md border border-dashed border-input px-4 py-6 text-sm transition-colors hover:border-primary hover:bg-primary/[0.03]">
             <Upload className="h-4 w-4 text-muted-foreground" />
-            {file ? <span className="num">{file.name} · {(file.size / 1024).toFixed(1)} KB</span> : <span className="text-muted-foreground">Choose a .zip of your repository</span>}
+            <span className="text-muted-foreground">Choose a .zip of your repository</span>
           </button>
-          <input ref={fileRef} type="file" accept=".zip,application/zip" className="hidden" data-testid="input-archive"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          {tooBig && <p className="mt-2 text-xs text-destructive">File exceeds the {maxMb} MB server limit.</p>}
+          <input ref={fileRef} type="file" accept=".zip,application/zip" disabled={busy} className="hidden" data-testid="input-archive"
+            onChange={(e) => { selectArchive(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+          <p role="status" className="num mt-2 break-all text-xs text-muted-foreground">{file ? `${file.name} · ${(file.size / 1024).toFixed(1)} KiB selected` : "No ZIP selected."}</p>
+          {file && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { setFile(null); setArchiveError(null); }}>Remove ZIP</Button>}
+          {archiveError && <p role="alert" className="mt-2 text-xs text-destructive">{archiveError} Your previous selection is unchanged.</p>}
+          {tooBig && <p role="alert" className="mt-2 text-xs text-destructive">File exceeds the {maxMb} MiB server limit.</p>}
+          </FileDropZone>
           <label className="mt-3 block text-xs font-medium">Project folder inside ZIP <span className="font-normal text-muted-foreground">optional</span>
             <Input value={zipProject} maxLength={200} onChange={e => setZipProject(e.target.value)} placeholder="e.g. sample-app" className="num mt-1" data-testid="input-zip-project" />
           </label>
@@ -123,12 +138,19 @@ export default function Overview() {
           <p className="mt-2 text-[11px] text-muted-foreground">ZIPs may contain irrelevant binary assets; they are skipped without execution. Supported source, expansion and entry-count limits still apply.</p>
         </Panel>
       </div>
+      </div>
 
       <Panel title="Session history" meta={list.data ? `${list.data.length} analyses` : undefined}>
         <p className="mb-3 text-xs text-muted-foreground">Analyses belong to this anonymous browser session and expire after a short retention window{status.data ? ` (storage: ${status.data.storage})` : ""}.</p>
         {list.isLoading ? <LoadingBlock rows={3} /> : list.isError ? <ErrorPanel error={list.error} onRetry={() => list.refetch()} /> :
           !list.data?.length ? <EmptyState title="No analyses in this session">Start with the bundled sample above to see the full workflow.</EmptyState> : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto scroll-p-1" onFocusCapture={(event) => {
+            // Browsers can consider a partially clipped table control visible.
+            // Reveal the entire focused control, including the final column.
+            if (event.target instanceof HTMLElement) {
+              event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
+            }
+          }}>
             <table className="w-full text-sm">
               <thead><tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                 <th className="py-2 pr-3 font-medium">Name</th><th className="py-2 pr-3 font-medium">Status</th><th className="py-2 pr-3 text-right font-medium">Files</th>

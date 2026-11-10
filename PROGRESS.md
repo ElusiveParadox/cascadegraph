@@ -1,5 +1,115 @@
 # Progress
 
+## PostgreSQL migration and usability verification — 2026-11-10
+- Replaced live SQLite process calls with a lifecycle-owned bounded async
+  PostgreSQL pool. Preserved owner checks, cookies, retention, quotas,
+  simulation snapshots and cascading deletion; no automatic mutation retries.
+- Applied the development schema and copied 131 live browser sessions. There
+  were no unexpired analyses/simulations to copy. Original SQLite remains
+  untouched and ignored by Git. Preview status/readiness report PostgreSQL.
+- Added real PostgreSQL integration coverage and an ephemeral PostgreSQL
+  service for GitHub Python/browser checks. Schema setup is explicit/development
+  only; production schema belongs to Replit Publish.
+- Fixed local SQLite interpreter overhead using a clean forkserver where
+  available; existing outage/shutdown/ownership checks pass without relaxed
+  timeouts or disabled assertions.
+- Executed 110 Python tests, Ruff, workspace TypeScript, frontend helper/retry/
+  file-intake tests and production frontend build successfully. JavaScript
+  audit has no known vulnerabilities; static/privacy scans report no findings.
+- Added two further PostgreSQL cancellation/ambiguous-commit regressions; all
+  eight PostgreSQL integration tests passed. A real desktop/mobile browser
+  journey passed sample analysis, correction/reload, simulation (baseline 8x,
+  candidate 2x), actual report download, history and cancel/confirm deletion.
+  It observed no 503 responses.
+- The first GitHub run passed Python/security and the real Compose experiment,
+  but caught clipped keyboard focus on the history delete action in the wide
+  desktop layout. Added focused-control scrolling inside the table scroller;
+  all three targeted desktop/compact/zoom-reflow regressions pass locally.
+- GitHub PR: https://github.com/ElusiveParadox/cascadegraph/pull/3 .
+  Required checks and merge status remain authoritative remotely; no production
+  publication or external developer feedback is claimed.
+
+## Compact navigation keyboard containment — 2026-11-10
+- Added expanded/control announcements, focus entry and a bidirectional loop over
+  the compact toggle and enabled navigation links. Covered intake and skip-link
+  content is inert while navigation is open.
+- Escape, the toggle and link activation close navigation and restore toggle
+  focus. Switching to the persistent desktop sidebar removes the focus trap
+  without trying to focus its now-hidden toggle.
+- Extended the existing desktop-layout suite: **10 passed**, including explicit
+  state, visible focus, disabled-link skipping, forward/reverse wrap, Escape,
+  reopen, same-route and changed-route dismissal, and desktop resize assertions.
+  Zoom coverage is reduced-CSS-viewport/double-density reflow emulation, not
+  native browser-UI zoom. Fixtures remain presentation-only; no ownership,
+  analysis or intake behavior changes.
+- Passed `pnpm run typecheck`, frontend unit checks,
+  `uv run --frozen ruff check src tests`, `uv run --frozen pytest` (**104 passed**)
+  and `git diff --check`. Browser command:
+  `E2E_API_PORT=28080 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/repl/tools/bin/chromium
+  pnpm --filter @workspace/cascadegraph test:e2e --project=desktop-layout`.
+
+## Repository file drag-and-drop — 2026-11-10
+- Added file drop feedback to the existing ZIP and direct-source panels while
+  retaining native keyboard file pickers. Selecting or dropping never submits;
+  existing analysis payloads, public-snapshot supplementation, path editing and
+  unchecked AI opt-in are unchanged.
+- Rejected batches leave previous selections and edited paths intact. Extension,
+  archive count, per-source size, cumulative source count and total source size
+  checks use advertised server limits; absent optional source limits fail
+  explicitly instead of guessing. Selected file/count/size summaries, ZIP removal
+  and immediate validation errors are visible.
+- Eight focused desktop/phone browser checks passed for drag feedback, rejection,
+  size/count limits, keyboard pickers, retained selections and source payloads.
+  Three new unit tests cover exact byte/count boundaries and changed server
+  limits; all frontend unit checks pass.
+- Passed workspace typechecking, frontend build, Python tests (104 passed),
+  Python lint and whitespace checks. Build retains existing UI component
+  sourcemap warnings. Managed web/API workflows started cleanly.
+
+## Real-server storage shutdown regression — 2026-11-10
+- Added separate Linux integration coverage through the production Uvicorn entry
+  point, with an OS-selected loopback port and a per-test temporary SQLite file.
+  Test-only, spawn-safe faults block immediately before or after a real commit.
+- Verified real HTTP uncertain-write responses, caller disconnect while a known
+  database child is blocked, and real SIGTERM to only the isolated server process.
+  Asserted the one-second storage shutdown budget separately from HTTP draining,
+  clean lifespan completion, and no surviving process-group members or DB child.
+- Restarted against the same temporary database and recovered original records
+  with the original cookie. Exact history reconciles committed/uncommitted writes;
+  invocation counts rule out transparent replay, and foreign owners remain denied.
+- Executed `uv run --frozen pytest -q`: **104 passed**.
+  `uv run --frozen ruff check src tests`, `pnpm run typecheck`,
+  `pnpm --filter @workspace/cascadegraph test`, and `git diff --check` passed.
+  No production code, managed preview process or shared database was changed.
+
+## Product theme and desktop layout — 2026-11-10
+- Applied the requested five-color palette, Poppins interface typography and a
+  restrained Georgia accent through the shared theme, navigation and panels.
+- Placed repository intake beside sample/ZIP options on wide desktop screens;
+  retained stacked layouts on smaller screens, all existing forms and notices.
+- Added visible keyboard focus, active-page navigation semantics, skip-to-content,
+  reduced-motion support and unrestricted viewport zoom.
+- Workspace TypeScript, frontend helper/retry tests and the frontend production
+  build passed. Verified 1440px desktop and 390px mobile overview screenshots;
+  no application errors appeared in those captures. The build reports existing
+  non-blocking sourcemap warnings in shared tooltip/select components.
+
+## Imported preview startup repair — 2026-11-10
+- Startup logs showed `vite: not found` because JavaScript dependencies were
+  absent. Restored them using the unchanged frozen pnpm lockfile and restarted
+  the existing CascadeGraph and component-preview workflows.
+- Verified all three managed workflows running, proxied API health/readiness
+  responses successful, and the CascadeGraph overview screenshot rendering
+  without browser errors.
+- Workspace TypeScript, frontend helper tests, all 86 Python tests and Ruff
+  passed. Optional AI remains unconfigured in this imported environment;
+  local analysis does not require it.
+- Corrected imported runtime modules from Node 20/Python 3.12 to Node 24/Python
+  3.13. Reinstalled frozen JavaScript dependencies with `--force`, recreated
+  Python dependencies with `uv sync --frozen --python 3.13`, and repeated the
+  checks successfully on Node 24.22.1/Python 3.13.11. All three workflows
+  restarted successfully; proxied readiness and the overview screenshot passed.
+
 ## 2026-11-10 — Foundation and repository inspection
 - Reviewed both supplied requirements documents and the merged workspace setup.
 - Verified the platform GitHub CLI proxy account and target repository permissions;
@@ -82,3 +192,69 @@
   real six-scenario Compose validation. The source journey deliberately delays
   initial history loading to check ownership readiness. Delete-dialog content
   has explicit precedence over its overlay; no forced-click test bypass is used.
+
+## Bounded storage outage execution — 2026-11-10
+- Audited the execution checkout: SQLite only, no storage-connection/vault modules
+  or prior uncertain-write contract. Kept the backend and existing retention mode.
+- All HTTP database calls now share immediate two-process admission with no queue,
+  100 ms SQLite lock waits, 400 ms transaction/VM limits and 800 ms whole-operation
+  deadlines. Running workers remain accounted for until reaped; cancellation and
+  one-second shutdown terminate work instead of abandoning threads.
+- Session resolution, quotas and simulation-parent ownership checks are atomic.
+  Storage failures never alter owner cookies or select fallback storage.
+  Ambiguous writes return explicit uncertain outcomes and are not retried.
+- Liveness bypasses storage, session creation and rate state. Readiness is
+  non-mutating, bounded, one-at-a-time and failure-cooled-down. API/ADR/threat-model
+  documentation includes exact budgets, OS termination limits and retry guidance;
+  curated OpenAPI and generated clients include health/error contracts.
+- Executed `uv run --frozen pytest`: **102 passed**, including **16 isolated
+  storage regressions** covering stalled acquisition/connect/query/commit,
+  event-loop heartbeat, HTTP saturation/liveness, pre-start/repeated cancellation,
+  shutdown/drained workers, actual SQLite locks/VM interruption, read-only probes,
+  cookie continuity/recovery, uncertain committed writes and concurrent quotas.
+- Executed `uv run --frozen ruff check src tests`, API code generation,
+  `pnpm run typecheck`, `pnpm --filter @workspace/cascadegraph test`, and
+  `git diff --check`: all passed.
+- Restarted the managed API workflow: clean startup. Proxied liveness/readiness
+  returned 200 with no-store/correlation headers and no Set-Cookie. App screenshot
+  rendered the existing overview without browser errors. No production publication
+  or external browser-journey test is claimed.
+
+## Frontend storage-outage retries — 2026-11-10
+- Query defaults honor ApiError Retry-After seconds/dates as a minimum, use
+  bounded exponential delay with positive jitter, and limit temporary storage
+  errors to three retries. Delays cap at 30 seconds; longer server hints stop
+  automatic retries instead of shortening the server's requested wait.
+- Uncertain storage outcomes never retry, including session-bootstrap GETs.
+  Mutation retries are explicitly disabled. Other errors retain the existing
+  one-retry limit and 404 exclusion. No storage backend changes.
+- Seven focused frontend tests cover timing/header parsing, caps, retry counts,
+  actual generated history/status requests, uncertain sessions, and mutations;
+  all pass alongside existing workspace helper tests.
+- Executed `pnpm run typecheck`, `uv run --frozen pytest` (104 passed),
+  `uv run --frozen ruff check src tests`, and `git diff --check`: passed.
+- Managed web workflow restarted cleanly and overview rendered. Preview observed
+  a temporary storage-overload 503; a subsequent proxied status request returned
+  200. No production publication or external browser-journey test is claimed.
+
+## Desktop layout and keyboard regressions — 2026-11-10
+- Added nine deterministic Playwright regressions at 1600×1000, 1024×768 and
+  720×450 CSS pixels with double density (200% layout-zoom emulation of a
+  1440×900 desktop, not native browser-UI zoom or pinch magnification).
+- Browser assertions cover computed theme colors/font families, intake panel
+  geometry, long uploaded filenames/editable relative paths, skip-link order and
+  destination, visible keyboard outlines and viewport bounds, disabled navigation,
+  unique current-page semantics after navigation, and local history/evidence
+  overflow with keyboard access to the final history column.
+- The zoom test exposed focused navigation below the fixed menu's visible bounds;
+  made the navigation surface vertically scrollable. No analysis ownership or
+  workflow test changes; new presentation fixtures never write server data.
+- Full browser suite: **13 passed**, including all four existing desktop/phone
+  source intake and inspect/correct/simulate/export/delete journeys. Ran with
+  `E2E_API_PORT=28080 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/repl/tools/bin/chromium
+  pnpm --filter @workspace/cascadegraph test:e2e`; defaults remain unchanged for CI.
+- Passed `pnpm run typecheck`, frontend unit checks, a separate TypeScript check
+  for the new browser tests/config, `uv run --frozen ruff check src tests`,
+  `uv run --frozen pytest` (**104 passed**) and `git diff --check`.
+- Managed web/API services started cleanly; overview screenshot rendered without
+  browser errors. No production publication.
