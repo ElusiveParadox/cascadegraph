@@ -144,7 +144,13 @@ export default function Overview() {
         <p className="mb-3 text-xs text-muted-foreground">Analyses belong to this anonymous browser session and expire after a short retention window{status.data ? ` (storage: ${status.data.storage})` : ""}.</p>
         {list.isLoading ? <LoadingBlock rows={3} /> : list.isError ? <ErrorPanel error={list.error} onRetry={() => list.refetch()} /> :
           !list.data?.length ? <EmptyState title="No analyses in this session">Start with the bundled sample above to see the full workflow.</EmptyState> : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto scroll-p-1" onFocusCapture={(event) => {
+            // Browsers can consider a partially clipped table control visible.
+            // Reveal the entire focused control, including the final column.
+            if (event.target instanceof HTMLElement) {
+              event.target.scrollIntoView({ block: "nearest", inline: "nearest" });
+            }
+          }}>
             <table className="w-full text-sm">
               <thead><tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                 <th className="py-2 pr-3 font-medium">Name</th><th className="py-2 pr-3 font-medium">Status</th><th className="py-2 pr-3 text-right font-medium">Files</th>

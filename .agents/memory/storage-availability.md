@@ -9,7 +9,9 @@ Keep admission occupied until execution is reaped, and fail explicitly if the OS
 cannot terminate uninterruptible I/O.
 
 **Why:** Storage outages must not block liveness or replace anonymous owners.
-The scoped product remains an ephemeral SQLite demo, not a new backend or vault.
+The original outage fixes targeted the local SQLite demo. The user subsequently
+authorized PostgreSQL live storage; do not use that old demo constraint to reject
+the migration. Ownership continuity and uncertain-outcome semantics still apply.
 
 **How to apply:** When changing storage execution, retain hard acquisition/commit
 boundaries, unchanged cookies on failure, and conservative uncertain-write

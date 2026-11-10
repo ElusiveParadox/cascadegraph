@@ -25,8 +25,9 @@
 - Single-process rate limiting and job bounds are suitable for a bounded demo,
   not a horizontally scaled abuse-control system.
 - Anonymous cookie sessions do not provide account recovery or private-team
-  collaboration. SQLite and bundled files are not durable writable production
-  storage. Export reports; analyses expire after 24 hours.
+  collaboration. PostgreSQL persists normalized snapshots; local/test SQLite and
+  bundled files are not durable writable production storage. Export reports;
+  analyses still expire after 24 hours.
 - Real CI validation is low-load, six-scenario, count-focused sample calibration.
   It is not measurement of user uploads, jitter calibration, a statistical latency
   benchmark, or proof against real production cascades.

@@ -58,7 +58,11 @@ def _execute(function, args, database_path, output, mutation):
 
 class StorageExecutor:
     def __init__(self):
-        self._context = multiprocessing.get_context("spawn")
+        # A clean forkserver avoids importing the application for every local
+        # operation. Unlike fork from the ASGI process it inherits no live pool
+        # connections or web threads. Keep spawn on platforms without forkserver.
+        method = "forkserver" if "forkserver" in multiprocessing.get_all_start_methods() else "spawn"
+        self._context = multiprocessing.get_context(method)
         self._lock = threading.Lock()
         self._jobs = {}
         self._closed = False

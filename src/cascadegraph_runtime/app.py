@@ -53,7 +53,7 @@ LIMITATIONS = [
     "Supports bounded Python Tenacity/urllib3, Istio VirtualService and Compose syntax only.",
     "Custom-loop AI support is restricted to the bundled range-loop pattern and requires explicit opt-in.",
     "Public GitHub root URLs only; no arbitrary hosts, redirect following or private GitHub credentials. Private source must be uploaded.",
-    "SQLite demo storage may reset on republish; export reports. Analyses expire after 24 hours.",
+    "Analyses expire after 24 hours and belong to this anonymous browser session; export important reports.",
     "The simulator supports acyclic call paths and sequential fan-out, not arbitrary production behavior.",
     "Measured validation describes only the committed sample and matching CI scenarios, never an uploaded application.",
 ]
@@ -173,7 +173,12 @@ class SafetyMiddleware(BaseHTTPMiddleware):
 async def lifespan(application):
     storage = getattr(application.state, "storage", None)
     if storage is None or storage.users == 0:
-        storage = StorageExecutor()
+        if store.uses_postgres():
+            from .postgres_execution import PostgresExecutor
+
+            storage = PostgresExecutor()
+        else:
+            storage = StorageExecutor()
         application.state.storage = storage
         try:
             await storage.run(store.initialize, mutation=True)
@@ -251,7 +256,7 @@ async def ready(request: Request):
 def system_status():
     return dict(version="1.0.0", model_version=MODEL_VERSION, ai_available=ai_available(),
                 ai_provider=os.getenv("LLM_PROVIDER", "replit_openai"),
-                storage="SQLite · session-owned · 24-hour retention · ephemeral demo",
+                storage=store.storage_description(),
                 supported_parsers=["Docker Compose", "Tenacity", "urllib3 / requests", "Istio VirtualService", "Sample custom loop (opt-in AI)"],
                 limitations=LIMITATIONS, max_archive_mb=MAX_ARCHIVE // (1024 * 1024), max_files=MAX_FILES,
                 max_expanded_mb=MAX_EXPANDED // (1024 * 1024), max_source_mb=MAX_SOURCE // (1024 * 1024),

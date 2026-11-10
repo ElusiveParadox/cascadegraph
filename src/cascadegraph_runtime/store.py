@@ -16,6 +16,18 @@ LOCK_SECONDS = 0.1
 TRANSACTION_SECONDS = 0.4
 
 
+def uses_postgres():
+    # An explicit SQLite path is the isolated local/test override. A configured
+    # PostgreSQL failure must never silently fall back to a different database.
+    return bool(os.getenv("DATABASE_URL")) and not os.getenv("CASCADEGRAPH_DB_PATH")
+
+
+def storage_description():
+    if uses_postgres():
+        return "PostgreSQL · session-owned · 24-hour retention"
+    return "SQLite · session-owned · 24-hour retention · ephemeral local storage"
+
+
 def database_path():
     return Path(os.getenv("CASCADEGRAPH_DB_PATH", str(ROOT / "cascadegraph.sqlite3")))
 

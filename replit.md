@@ -7,8 +7,9 @@ for engineering rules and PROGRESS.md for executed verification and release gate
 
 - Keep Python 3.13 and the planned FastAPI/Pydantic computational backend.
 - React/Vite is the web frontend, not a replacement for the Python engine.
-- No PostgreSQL requirement has been established. The pre-existing `lib/db`
-  scaffold is dormant: do not push schemas or require `DATABASE_URL` for setup.
+- PostgreSQL is now the live store, explicitly requested by the user. The
+  pre-existing TypeScript `lib/db` scaffold remains dormant; Python owns storage.
+  Development schema is `schema/postgresql.sql`; production schema uses Publish.
 - There was no legacy app or UI to migrate. Do not claim visual parity.
 - Preserve `.migration-backup/attached_assets/`, task plans, and Git history/remotes.
 
@@ -22,17 +23,19 @@ Use the managed workflows (they supply service ports and routing):
 The API workflow uses `uv run --frozen python -m cascadegraph_runtime` and
 requires `PORT`. Health is `/api/healthz`; analysis/simulation APIs are `/api/v1`.
 The retained Express files are unused template files, not the active backend.
-SQLite is automatic bounded demo storage. AI is optional, provisioned through
+PostgreSQL uses the runtime-managed `DATABASE_URL` with a bounded async pool.
+An explicit `CASCADEGRAPH_DB_PATH` selects isolated local/test SQLite, never
+an automatic fallback after a PostgreSQL failure. AI is optional, provisioned through
 Replit AI Integrations and unchecked by default. Do not expose credentials.
 
 ## Layout and setup
 
 - `artifacts/cascadegraph/` — web artifact for the approved implementation.
-- `src/cascadegraph_runtime/` — FastAPI, safe parsers, AI, simulation and SQLite.
+- `src/cascadegraph_runtime/` — FastAPI, safe parsers, AI, simulation and storage.
 - `pyproject.toml`, `uv.lock` — reproducible Python dependencies.
 - `.migration-backup/attached_assets/` — original architecture, execution prompt,
   and screenshot (unchanged).
-- `scripts/post-merge.sh` — installs JavaScript and Python dependencies, no DB push.
+- `scripts/post-merge.sh` — restores dependencies and applies development schema.
 
 Install JavaScript dependencies with `pnpm install --frozen-lockfile`; Python
 dependencies use the platform package tool and `uv sync --frozen` for restoration.

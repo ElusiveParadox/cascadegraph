@@ -1,5 +1,34 @@
 # Progress
 
+## PostgreSQL migration and usability verification — 2026-11-10
+- Replaced live SQLite process calls with a lifecycle-owned bounded async
+  PostgreSQL pool. Preserved owner checks, cookies, retention, quotas,
+  simulation snapshots and cascading deletion; no automatic mutation retries.
+- Applied the development schema and copied 131 live browser sessions. There
+  were no unexpired analyses/simulations to copy. Original SQLite remains
+  untouched and ignored by Git. Preview status/readiness report PostgreSQL.
+- Added real PostgreSQL integration coverage and an ephemeral PostgreSQL
+  service for GitHub Python/browser checks. Schema setup is explicit/development
+  only; production schema belongs to Replit Publish.
+- Fixed local SQLite interpreter overhead using a clean forkserver where
+  available; existing outage/shutdown/ownership checks pass without relaxed
+  timeouts or disabled assertions.
+- Executed 110 Python tests, Ruff, workspace TypeScript, frontend helper/retry/
+  file-intake tests and production frontend build successfully. JavaScript
+  audit has no known vulnerabilities; static/privacy scans report no findings.
+- Added two further PostgreSQL cancellation/ambiguous-commit regressions; all
+  eight PostgreSQL integration tests passed. A real desktop/mobile browser
+  journey passed sample analysis, correction/reload, simulation (baseline 8x,
+  candidate 2x), actual report download, history and cancel/confirm deletion.
+  It observed no 503 responses.
+- The first GitHub run passed Python/security and the real Compose experiment,
+  but caught clipped keyboard focus on the history delete action in the wide
+  desktop layout. Added focused-control scrolling inside the table scroller;
+  all three targeted desktop/compact/zoom-reflow regressions pass locally.
+- GitHub PR: https://github.com/ElusiveParadox/cascadegraph/pull/3 .
+  Required checks and merge status remain authoritative remotely; no production
+  publication or external developer feedback is claimed.
+
 ## Compact navigation keyboard containment — 2026-11-10
 - Added expanded/control announcements, focus entry and a bidirectional loop over
   the compact toggle and enabled navigation links. Covered intake and skip-link

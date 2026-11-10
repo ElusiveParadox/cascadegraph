@@ -273,7 +273,7 @@ export const getReadinessCheckUrl = () => {
 }
 
 /**
- * Bounded non-mutating SQLite probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms.
+ * Bounded non-mutating database probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms.
  */
 export const readinessCheck = async ( options?: Parameters<typeof customFetch>[1]): Promise<HealthStatus> => {
 
@@ -319,7 +319,7 @@ export type ReadinessCheckQueryResult = NonNullable<Awaited<ReturnType<typeof re
 export type ReadinessCheckQueryError = ErrorType<StorageFailureResponse>
 
 
-/** Bounded non-mutating SQLite probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms. */
+/** Bounded non-mutating database probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms. */
 export function useReadinessCheck<TData = Awaited<ReturnType<typeof readinessCheck>>, TError = ErrorType<StorageFailureResponse>>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof readinessCheck>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
@@ -330,7 +330,7 @@ export function useReadinessCheck<TData = Awaited<ReturnType<typeof readinessChe
       >, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/** Bounded non-mutating SQLite probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms. */
+/** Bounded non-mutating database probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms. */
 export function useReadinessCheck<TData = Awaited<ReturnType<typeof readinessCheck>>, TError = ErrorType<StorageFailureResponse>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readinessCheck>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
@@ -341,12 +341,12 @@ export function useReadinessCheck<TData = Awaited<ReturnType<typeof readinessChe
       >, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/** Bounded non-mutating SQLite probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms. */
+/** Bounded non-mutating database probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms. */
 export function useReadinessCheck<TData = Awaited<ReturnType<typeof readinessCheck>>, TError = ErrorType<StorageFailureResponse>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readinessCheck>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/** Bounded non-mutating SQLite probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms. */
+/** Bounded non-mutating database probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms. */
 export function useReadinessCheck<TData = Awaited<ReturnType<typeof readinessCheck>>, TError = ErrorType<StorageFailureResponse>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof readinessCheck>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient

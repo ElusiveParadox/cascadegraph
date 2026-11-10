@@ -1,5 +1,10 @@
 # Active work
 
+Current user-requested work: repair storage initialization, migrate live storage
+to PostgreSQL, preserve existing session data, verify desktop/mobile analysis,
+correction, simulation, export and deletion, and submit all safe current source
+changes to the existing GitHub repository through passing CI.
+
 | ID | Priority | Phase | Work | Depends on | Status | Acceptance |
 |---|---|---|---|---|---|---|
 | CG-CORE | P0 | 1 | Safe ingestion, parsers, normalization, graph | foundation | DONE | 52 Python tests include supported semantics, hostile inputs, ownership and simulation |

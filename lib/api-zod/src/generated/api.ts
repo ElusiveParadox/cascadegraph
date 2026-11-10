@@ -22,7 +22,7 @@ export const LivenessCheckResponse = zod.object({
 
 
 /**
- * Bounded non-mutating SQLite probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms.
+ * Bounded non-mutating database probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms.
  */
 export const ReadinessCheckResponse = zod.object({
   "status": zod.string()

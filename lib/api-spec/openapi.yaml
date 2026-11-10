@@ -28,7 +28,7 @@ paths:
   /v1/health/ready:
     get:
       operationId: readinessCheck
-      description: Bounded non-mutating SQLite probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms.
+      description: Bounded non-mutating database probe. No owner cookies. One concurrent probe; failed probes cool down for 500 ms.
       responses:
         "200":
           description: Storage is readable

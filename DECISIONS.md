@@ -1,5 +1,29 @@
 # Engineering decisions
 
+## ADR-011 — PostgreSQL live storage (2026-11-10)
+Accepted at the user's explicit request. The current two-process SQLite executor
+rejects concurrent browser reads and spawns a new interpreter for every operation.
+Use the existing managed PostgreSQL database through a lifecycle-owned async
+psycopg pool instead. Alternatives were increasing SQLite worker limits (retains
+filesystem durability and process overhead issues) or moving the backend to
+TypeScript (unnecessary disruption); both were rejected.
+
+Bound the pool, acquisition wait, database statements and lock waits. Never
+automatically retry writes; a failed commit response remains an uncertain outcome.
+Retain anonymous owners, cookie scope, 24-hour retention, quotas, cascading
+deletion, normalized JSON snapshots and original simulation provenance.
+PostgreSQL changes persistence, not authentication or model accuracy.
+
+An explicit SQLite file remains available for isolated local/tests only. Once
+PostgreSQL is selected, an outage must not fall back to SQLite or invent an owner.
+Apply schema to development explicitly/from post-merge; Replit Publish owns the
+production schema diff. No API startup or production build DDL is allowed.
+Copy unexpired local data transactionally with unchanged session tokens and IDs;
+leave the source file untouched and reject conflicts rather than overwrite.
+Local SQLite uses a clean forkserver where supported (spawn otherwise), avoiding
+per-operation interpreter startup overrunning existing fault-test budgets.
+Neither mode inherits application pool connections.
+
 ## ADR-001 — Python computational core (2026-11-10)
 Accepted. FastAPI/Pydantic and Python AST/safe YAML implement the analysis engine;
 React/Vite renders it through the shared path proxy. This preserves the requested
