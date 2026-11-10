@@ -60,3 +60,20 @@
 - No production URL, durable private-team storage or real developer feedback is
   claimed. Three to five actual developer participants still need to be recruited.
 - See KNOWN_LIMITATIONS and VALIDATION_PROTOCOL for model and measurement limits.
+
+## Public repository and source-file intake — 2026-11-10
+- Increased ZIP/download cap to 50 MiB, archive expansion to 200 MiB and entries
+  to 2,000. Supported source is bounded at 20 MiB / 512 KiB per file; direct
+  uploads at 100 files. Admission happens before large-body buffering.
+- Added strict public GitHub URL ingestion, optional ref/project folder, immutable
+  commit provenance, and labelled source-file supplements. No arbitrary hosts,
+  redirects, creator credentials, raw-source persistence or code execution.
+- Added explicit missing-file guidance and resubmission; corrected Compose
+  build-context resolution relative to nested Compose files.
+- 86 Python tests, Ruff, frontend types and helper tests pass. A real URL-only
+  browser import produced the three-service/two-edge graph, persisted its exact
+  commit after reload, exported matching report provenance and deleted cleanly.
+  Policies/edges still require explicit human confirmation; ingestion is not
+  a claim of verified production safety.
+- Static security and privacy scans report no findings. Feature PR checks are
+  being completed before protected merge.

@@ -7,7 +7,8 @@ also exposes runtime route metadata; use the curated contract for stable schemas
 Base `/api`:
 - GET `/healthz`, `/v1/health/live`, `/v1/health/ready`, `/v1/status`.
 - GET/POST `/v1/analyses`; POST JSON `{source_type:"sample",use_ai:false}`.
-- POST `/v1/analyses/archive` multipart ZIP `file` plus boolean `use_ai`.
+- POST `/v1/analyses/archive` multipart ZIP `file` plus optional boolean `use_ai`
+  and repository-relative `project_path`.
 - POST `/v1/analyses/repository` JSON `repository_url`, optional `ref`,
   `project_path`, `use_ai`. Only public GitHub root URLs are accepted.
 - POST `/v1/analyses/sources` multipart repeated `files` and matching `paths`,

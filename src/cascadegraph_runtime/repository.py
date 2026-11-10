@@ -59,8 +59,10 @@ async def public_host(host: str):
 
 
 async def bounded_response(client: httpx.AsyncClient, url: str, limit: int, accept: str = "application/zip") -> bytes:
-    host = urlsplit(url).hostname
-    await public_host(host)
+    target = urlsplit(url)
+    if target.scheme != "https" or target.netloc not in HOSTS or target.query or target.fragment:
+        raise InputError("Only credential-free HTTPS requests to fixed GitHub hosts are allowed")
+    await public_host(target.hostname)
     async with client.stream("GET", url, headers={"Accept": accept}) as response:
         if response.is_redirect:
             raise InputError("GitHub redirected this repository; use its current canonical repository URL")
@@ -86,6 +88,7 @@ async def bounded_response(client: httpx.AsyncClient, url: str, limit: int, acce
 
 async def fetch_repository(repository_url: str, ref: str = "") -> tuple[dict[str, str], RepositorySource]:
     owner, repo, canonical = parse_repository_url(repository_url)
+    owner, repo = quote(owner, safe=""), quote(repo, safe="")
     ref = validate_ref(ref)
 
     async def retrieve():

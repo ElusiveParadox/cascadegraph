@@ -14,7 +14,7 @@ export default function HelpPage() {
           <Panel title="Workflow">
             <ol className="space-y-2 text-sm">
               {[
-                ["Ingest", "Bundled sample or a ZIP archive. Remote repository URLs are not fetched."],
+                ["Ingest", "Paste a public GitHub root URL, upload a ZIP or supported source files, or use the sample. Public snapshots are commit-pinned; missing files are requested explicitly. Private repositories require file uploads, not credentials."],
                 ["Extract", "Deterministic parsers locate retry configuration and call sites, recording file, line range, excerpt and sha256 for each fact."],
                 ["Normalize", "Framework counts (retries vs attempts) become max total attempts including the first call. Anything that cannot be determined is marked unknown, never guessed."],
                 ["Confirm", "Reviewers confirm or correct policies (attempts, timeout, deadline, note) and confirm inferred edges with a note. Source facts are kept alongside corrections."],
@@ -42,7 +42,11 @@ export default function HelpPage() {
               <KV k="Model version"><span className="num">{s.data.model_version}</span></KV>
               <KV k="AI">{s.data.ai_available ? <Tag tone="warn">{s.data.ai_provider}</Tag> : <Tag>not configured</Tag>}</KV>
               <KV k="Storage"><span className="text-xs">{s.data.storage}</span></KV>
-              <KV k="Max archive"><span className="num">{s.data.max_archive_mb} MB</span></KV>
+              <KV k="Max archive"><span className="num">{s.data.max_archive_mb} MiB</span></KV>
+              <KV k="Max expanded"><span className="num">{s.data.max_expanded_mb} MiB</span></KV>
+              <KV k="Supported source"><span className="num">{s.data.max_source_mb} MiB</span></KV>
+              <KV k="Each source file"><span className="num">{s.data.max_file_kb} KiB</span></KV>
+              <KV k="Direct source files"><span className="num">{s.data.max_source_files}</span></KV>
               <KV k="Max files"><span className="num">{s.data.max_files}</span></KV>
               <KV k="Parsers"><span className="flex flex-wrap justify-end gap-1">{s.data.supported_parsers.map((p) => <Tag key={p}>{p}</Tag>)}</span></KV>
             </dl>

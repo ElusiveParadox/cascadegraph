@@ -52,6 +52,21 @@ def test_private_dns_rejected(monkeypatch):
         asyncio.run(repository.public_host("metadata.google.internal"))
 
 
+@pytest.mark.parametrize("url", [
+    "http://api.github.com/repos/a/b", "https://token@api.github.com/repos/a/b",
+    "https://api.github.com:443/repos/a/b", "https://api.github.com/repos/a/b?token=x",
+    "https://codeload.github.com.evil.test/a/b", "https://169.254.169.254/",
+])
+def test_outbound_url_policy_before_dns(monkeypatch, url):
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *args, **kwargs: pytest.fail("Unsafe target must not resolve"))
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request: pytest.fail("Must not fetch"))) as client:
+            await repository.bounded_response(client, url, 256)
+    with pytest.raises(InputError):
+        asyncio.run(run())
+
+
 def zip_sources(prefix="snapshot/sample-app/"):
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w") as archive:
