@@ -1,1 +1,2 @@
 - [Storage availability](storage-availability.md) — stoppable execution, retained capacity, unchanged owners and uncertain-write semantics; keep spawned fault fixtures lightweight.
+- [Desktop accessibility verification](desktop-accessibility.md) — zoom must exercise CSS reflow; DOM focus alone does not establish that keyboard users can see a control.

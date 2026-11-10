@@ -66,7 +66,7 @@ export function Shell({ children }: { children: ReactNode }) {
     </nav>
   );
   const side = (
-    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+    <div className="flex h-full flex-col overflow-y-auto bg-sidebar text-sidebar-foreground">
       <Link href="/" className="flex items-center gap-2.5 px-4 py-5" data-testid="link-brand">
         <svg viewBox="0 0 28 28" className="h-7 w-7" aria-hidden>
           <circle cx="5" cy="14" r="3" fill="hsl(var(--sidebar-primary))" />

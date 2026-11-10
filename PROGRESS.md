@@ -170,3 +170,25 @@
 - Managed web workflow restarted cleanly and overview rendered. Preview observed
   a temporary storage-overload 503; a subsequent proxied status request returned
   200. No production publication or external browser-journey test is claimed.
+
+## Desktop layout and keyboard regressions — 2026-11-10
+- Added nine deterministic Playwright regressions at 1600×1000, 1024×768 and
+  720×450 CSS pixels with double density (200% layout-zoom emulation of a
+  1440×900 desktop, not native browser-UI zoom or pinch magnification).
+- Browser assertions cover computed theme colors/font families, intake panel
+  geometry, long uploaded filenames/editable relative paths, skip-link order and
+  destination, visible keyboard outlines and viewport bounds, disabled navigation,
+  unique current-page semantics after navigation, and local history/evidence
+  overflow with keyboard access to the final history column.
+- The zoom test exposed focused navigation below the fixed menu's visible bounds;
+  made the navigation surface vertically scrollable. No analysis ownership or
+  workflow test changes; new presentation fixtures never write server data.
+- Full browser suite: **13 passed**, including all four existing desktop/phone
+  source intake and inspect/correct/simulate/export/delete journeys. Ran with
+  `E2E_API_PORT=28080 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/repl/tools/bin/chromium
+  pnpm --filter @workspace/cascadegraph test:e2e`; defaults remain unchanged for CI.
+- Passed `pnpm run typecheck`, frontend unit checks, a separate TypeScript check
+  for the new browser tests/config, `uv run --frozen ruff check src tests`,
+  `uv run --frozen pytest` (**104 passed**) and `git diff --check`.
+- Managed web/API services started cleanly; overview screenshot rendered without
+  browser errors. No production publication.
