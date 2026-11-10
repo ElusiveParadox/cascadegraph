@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "CascadeGraph"
+description = "React workspace scaffold for the planned CascadeGraph application. Product functionality will be implemented in the existing build task."
+version = "1.0.0"
+id = "artifacts/cascadegraph"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18998
+
+[services.development]
+run = "pnpm --filter @workspace/cascadegraph run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/cascadegraph", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/cascadegraph/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18998"
+BASE_PATH = "/"

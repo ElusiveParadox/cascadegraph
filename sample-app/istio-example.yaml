@@ -1,0 +1,15 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: inventory-example
+spec:
+  hosts: [inventory]
+  http:
+    - route:
+        - destination:
+            host: inventory
+      timeout: 2s
+      retries:
+        attempts: 2
+        perTryTimeout: 200ms
+        retryOn: 5xx,connect-failure

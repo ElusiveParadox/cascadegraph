@@ -1,0 +1,56 @@
+services:
+  gateway:
+    build:
+      context: ./gateway
+    environment:
+      ORDER_URL: http://order:8000
+    ports: ["127.0.0.1:18080:8000"]
+    depends_on:
+      order:
+        condition: service_healthy
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 192m
+    cpus: 1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  order:
+    build:
+      context: ./order
+    environment:
+      INVENTORY_URL: http://inventory:8000
+    ports: ["127.0.0.1:18081:8000"]
+    depends_on:
+      inventory:
+        condition: service_healthy
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 192m
+    cpus: 1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  inventory:
+    build:
+      context: ./inventory
+    ports: ["127.0.0.1:18082:8000"]
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 192m
+    cpus: 1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
