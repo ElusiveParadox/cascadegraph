@@ -44,9 +44,12 @@ async def main():
         ("Downstream timeouts", "timeout", 250, 0, 3),
     ]
     for label, mode, delay, failure_rate, attempts in cases:
-        configure("gateway", {"attempts": attempts, "backoff_ms": 50, "exponential": False})
-        configure("order", {"attempts": attempts, "backoff_ms": 25, "custom_loop": False})
-        configure("inventory", {"mode": mode, "delay_ms": delay, "failure_rate": failure_rate, "seed": 42})
+        configure("gateway", {"attempts": attempts, "backoff_ms": 50, "exponential": False,
+                              "jitter_ms": 0, "capacity": 4, "service_time_ms": 0})
+        configure("order", {"attempts": attempts, "backoff_ms": 25, "custom_loop": False,
+                            "jitter_ms": 0, "capacity": 4, "service_time_ms": 0})
+        configure("inventory", {"mode": mode, "delay_ms": delay, "failure_rate": failure_rate,
+                                "seed": 42, "capacity": 4, "service_time_ms": 0})
         model = analysis.model_copy(deep=True)
         for p in model.policies:
             if p.edge_id:
@@ -102,7 +105,7 @@ async def main():
     if failures:
         raise AssertionError("Legacy count tolerance exceeded; raw measurements were preserved")
     run(analysis, dict(workflow_url=report["workflow_url"], commit_sha=report["commit_sha"],
-        measured_at=utcnow(), model_version=MODEL_VERSION, schema_version="concurrent-calibration-1",
+        measured_at=utcnow(), model_version=MODEL_VERSION, schema_version="concurrent-calibration-2",
         python=platform.python_version(), platform=platform.platform(),
         library_versions={name: version(name) for name in ("requests", "urllib3", "tenacity")},
         runner_image=os.getenv("ImageVersion", "unknown")))

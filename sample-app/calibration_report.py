@@ -27,6 +27,12 @@ def interval(values):
                 bootstrap_ci95=[percentile(means, .025), percentile(means, .975)])
 
 
+def edge_retries(actual):
+    """des-1.0 counts retry-layer invocations, not all repeated logical receipts."""
+    return {"gateway": 0, "order": actual["gateway"]["retry_schedules"],
+            "inventory": actual["order"]["retry_schedules"]}
+
+
 def summarize(trials):
     groups = {}
     for trial in trials:
@@ -47,9 +53,21 @@ def summarize(trials):
             flags.append("Amplification discrepancy exceeds the legacy 0.5 count tolerance.")
         if abs(latency["mean"]) > max(50, .25 * comparisons["p95_ms"]["predicted"]["mean"]):
             flags.append("p95 latency differs by over 50 ms or 25%; this is not calibrated latency accuracy.")
+        for service in ("gateway", "order", "inventory"):
+            key = service + ".busy_ms"
+            if key in comparisons:
+                busy = comparisons[key]
+                if abs(busy["paired_error"]["mean"]) > .1 * max(1, busy["predicted"]["mean"]):
+                    flags.append(f"{service} occupied-worker time differs by more than 10%.")
+            key = service + ".peak_queue"
+            if key in comparisons:
+                queue = comparisons[key]
+                if abs(queue["paired_error"]["mean"]) > max(2, .25 * queue["predicted"]["mean"]):
+                    flags.append(f"{service} peak worker queue differs by more than 25% or two slots.")
         notes = [
             "Model service times are controlled inputs, not fitted to observations.",
             "Real transport/scheduler overhead and 100 ms drain-poll resolution are absent from virtual time.",
+            "Compared retries are the immediate caller's retry-hook counts. Repeated receiving-side logical IDs also include ancestor replays and remain separate raw diagnostics.",
         ]
         if rows[0]["scenario"]["mode"] == "timeout":
             notes.append("Model timeout faults use max(fault latency, twice scenario timeout); actual leaf sleeps the declared delay. Both leave physical work running, but durations differ.")

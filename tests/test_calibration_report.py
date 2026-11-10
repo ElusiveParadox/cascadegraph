@@ -56,3 +56,25 @@ def test_model_integrates_worker_occupancy_without_deadline_timer_padding():
     assert services["gateway"]["mean_occupancy"] == 1
     assert services["gateway"]["peak_queue"] == 1
     assert services["inventory"]["mean_occupancy"] == pytest.approx(1 / 3, abs=1e-6)
+
+
+def test_retry_comparison_distinguishes_ancestor_replays_from_edge_retries():
+    actual = {"gateway": {"retry_schedules": 48, "retry_attempts": 0},
+              "order": {"retry_schedules": 144, "retry_attempts": 48},
+              "inventory": {"retry_schedules": 0, "retry_attempts": 192}}
+    aligned = report.edge_retries(actual)
+    assert aligned == {"gateway": 0, "order": 48, "inventory": 144}
+    assert sum(aligned.values()) == 192
+    assert sum(m["retry_attempts"] for m in actual.values()) == 240
+
+
+def test_occupancy_discrepancy_is_flagged_even_when_amplification_matches():
+    trials = [dict(name="timeout", seed=seed, jitter_ms=0, scenario={"mode": "timeout"},
+                   observed={"amplification": 12, "p95_ms": 7000, "gateway.peak_queue": 20,
+                             "inventory.busy_ms": 58000, "inventory.peak_queue": 104},
+                   predicted={"amplification": 12, "p95_ms": 6980, "gateway.peak_queue": 20,
+                              "inventory.busy_ms": 44880, "inventory.peak_queue": 184})
+              for seed in [11, 42, 73, 101, 211]]
+    result = report.summarize(trials)[0]
+    assert any("occupied-worker" in flag for flag in result["discrepancy_flags"])
+    assert any("peak worker queue" in flag for flag in result["discrepancy_flags"])

@@ -1,4 +1,14 @@
 # Controlled validation sample
+
+The Actions harness also runs 40 open-loop concurrent trials (eight scenarios,
+five seeds each), collecting FIFO worker occupancy, retry activity and raw
+latencies. See `docs/VALIDATION_PROTOCOL.md` for definitions, bootstrap intervals
+and known model discrepancies. These produce separate concurrent artifacts;
+the historical `validation/verified-sample.json` is never overwritten.
+
+Run services/measurements only on the trusted repository's GitHub-hosted runner.
+The Python entry point rejects local/Replit measurement execution. Pure reporting
+and virtual-model tests do not start services.
 Gateway → order → inventory communicate over the Compose network. Tenacity and
 urllib3 implement real supported retry policies. `order/custom_retry.py` is an
 optional alternate call implementation and the opt-in AI extraction fixture.

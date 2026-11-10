@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
-from calibration_report import distribution, summarize
+from calibration_report import distribution, edge_retries, summarize
 
 from cascadegraph_runtime.models import Scenario
 from cascadegraph_runtime.simulation import simulate
@@ -147,18 +147,23 @@ def run(analysis, metadata):
             latency = distribution([item["latency_ms"] for item in outcomes])
             logical = actual["gateway"]["incoming"]
             downstream = actual["order"]["incoming"] + actual["inventory"]["incoming"]
+            retries = edge_retries(actual)
             observed = dict(
                 amplification=downstream / logical if logical else 0,
                 succeeded=sum(o["status"] == 200 for o in outcomes),
                 deadline_misses=sum(o["latency_ms"] >= scenario.deadline_ms for o in outcomes),
-                retry_attempts=sum(m["retry_attempts"] for m in actual.values()),
+                retry_attempts=sum(retries.values()),
                 **{key: latency[key] for key in ("p50_ms", "p95_ms", "p99_ms")},
             )
             predicted = {key: prediction[key] for key in observed}
             for service, values in actual.items():
                 p = next(p for p in prediction["per_service"] if p["service_id"] == service)
-                for key in ("peak_concurrency", "peak_queue", "busy_ms", "retry_attempts"):
-                    observed[f"{service}.{key}"] = values[key]
+                for key in ("peak_concurrency", "peak_queue", "busy_ms", "retry_attempts", "attempts", "failures"):
+                    observed[f"{service}.{key}"] = (
+                        retries[service]
+                        if key == "retry_attempts"
+                        else values["incoming" if key == "attempts" else "failed" if key == "failures" else key]
+                    )
                     predicted[f"{service}.{key}"] = p["retries" if key == "retry_attempts" else key]
                 observed[f"{service}.mean_occupancy"] = values["busy_ms"] / horizon
                 predicted[f"{service}.mean_occupancy"] = p["mean_occupancy"]
