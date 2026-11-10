@@ -1,0 +1,159 @@
+import { useRef, useState } from "react";
+import { Link, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import { Archive, ArrowRight, Box, Trash2, Upload } from "lucide-react";
+import {
+  getListAnalysesQueryKey, useCreateAnalysis, useDeleteAnalysis, useGetSystemStatus, useListAnalyses, useUploadArchive, type Analysis,
+} from "@workspace/api-client-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { EmptyState, ErrorPanel, LoadingBlock, PageHeader, Panel, Tag, severityTone } from "@/components/common";
+import { useToast } from "@/hooks/use-toast";
+import { fmtDate, readSelection, writeSelection } from "@/lib/workspace";
+
+function AiOptIn({ id, checked, onChange, available }: { id: string; checked: boolean; onChange: (v: boolean) => void; available: boolean | undefined }) {
+  return (
+    <div className="rounded-sm border border-dashed border-border bg-muted/40 p-3">
+      <label htmlFor={id} className="flex items-start gap-2.5 text-sm">
+        <Checkbox id={id} checked={checked} disabled={!available} onCheckedChange={(v) => onChange(v === true)} data-testid={`checkbox-${id}`} className="mt-0.5" />
+        <span>
+          <span className="font-medium">Use AI-assisted extraction</span> <Tag tone={available ? "warn" : "info"}>{available ? "opt-in, billed" : "unavailable"}</Tag>
+          <span className="mt-1 block text-xs text-muted-foreground">
+            {available
+              ? "When enabled, relevant source excerpts are sent to an external model provider and the call is billed to your credits. Deterministic parsing runs either way; leave unchecked to keep source local."
+              : "No AI provider is configured on this server. Analysis uses deterministic parsers only."}
+          </span>
+        </span>
+      </label>
+    </div>
+  );
+}
+
+export default function Overview() {
+  const qc = useQueryClient();
+  const [, nav] = useLocation();
+  const { toast } = useToast();
+  const status = useGetSystemStatus();
+  const list = useListAnalyses();
+  const [sampleAi, setSampleAi] = useState(false);
+  const [zipAi, setZipAi] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const onCreated = (a: Analysis) => {
+    qc.invalidateQueries({ queryKey: getListAnalysesQueryKey() });
+    writeSelection({ analysisId: a.id, simulationId: undefined });
+    nav(`/analyses/${a.id}`);
+  };
+  const create = useCreateAnalysis({ mutation: { onSuccess: onCreated } });
+  const upload = useUploadArchive({ mutation: { onSuccess: onCreated } });
+  const del = useDeleteAnalysis({
+    mutation: {
+      onSuccess: (_d, vars) => {
+        qc.invalidateQueries({ queryKey: getListAnalysesQueryKey() });
+        if (readSelection().analysisId === vars.analysisId) writeSelection({ analysisId: undefined, simulationId: undefined });
+        toast({ title: "Analysis deleted", description: "Source-derived data and simulations were removed." });
+      },
+      onError: (e) => toast({ title: "Delete failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" }),
+    },
+  });
+  const busy = create.isPending || upload.isPending;
+  const maxMb = status.data?.max_archive_mb;
+  const tooBig = !!(file && maxMb && file.size > maxMb * 1024 * 1024);
+
+  return (
+    <>
+      <PageHeader kicker="00 / overview" title="Where do your retries multiply?">
+        Point CascadeGraph at service source. It extracts retry policies with file and line evidence, builds the call graph, and replays seeded failure scenarios so you can compare a baseline against a candidate policy.
+      </PageHeader>
+
+      {busy && (
+        <div className="rise relative overflow-hidden rounded-md border border-primary/40 bg-primary/5 p-4" role="status" data-testid="status-processing">
+          <div className="text-sm font-semibold">Analyzing {create.isPending ? "bundled sample" : file?.name}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">Parsing runs synchronously within a bounded file and size budget. The result appears when the request returns; there is no partial progress to report.</div>
+          <div className="mt-3 h-[3px] overflow-hidden rounded bg-primary/15"><div className="scanbar h-full w-1/3 bg-primary" /></div>
+        </div>
+      )}
+      {create.isError && <ErrorPanel error={create.error} title="Sample analysis failed" />}
+      {upload.isError && <ErrorPanel error={upload.error} title="Archive analysis failed" />}
+
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+        <Panel title={<span className="flex items-center gap-2"><Box className="h-3.5 w-3.5" />Bundled sample</span>} meta="no upload">
+          <p className="text-sm text-muted-foreground">A small multi-service repository with known retry layering. Useful to learn the workflow before uploading your own code.</p>
+          <div className="mt-3"><AiOptIn id="sample-ai" checked={sampleAi} onChange={setSampleAi} available={status.data?.ai_available} /></div>
+          <Button className="mt-3" disabled={busy} data-testid="button-analyze-sample"
+            onClick={() => create.mutate({ data: { source_type: "sample", use_ai: sampleAi && !!status.data?.ai_available } })}>
+            Analyze sample <ArrowRight className="ml-1.5 h-4 w-4" />
+          </Button>
+        </Panel>
+        <Panel title={<span className="flex items-center gap-2"><Archive className="h-3.5 w-3.5" />ZIP archive</span>} meta={status.data ? `≤ ${status.data.max_archive_mb} MB · ≤ ${status.data.max_files} files` : "limits loading"}>
+          <button type="button" onClick={() => fileRef.current?.click()} data-testid="button-choose-archive"
+            className="grid-paper flex w-full flex-col items-center gap-1 rounded-sm border border-dashed border-border px-4 py-5 text-sm transition-colors hover:border-primary">
+            <Upload className="h-4 w-4 text-muted-foreground" />
+            {file ? <span className="num">{file.name} · {(file.size / 1024).toFixed(1)} KB</span> : <span className="text-muted-foreground">Choose a .zip of your repository</span>}
+          </button>
+          <input ref={fileRef} type="file" accept=".zip,application/zip" className="hidden" data-testid="input-archive"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          {tooBig && <p className="mt-2 text-xs text-destructive">File exceeds the {maxMb} MB server limit.</p>}
+          <div className="mt-3"><AiOptIn id="zip-ai" checked={zipAi} onChange={setZipAi} available={status.data?.ai_available} /></div>
+          <Button className="mt-3" variant="secondary" disabled={!file || busy || tooBig} data-testid="button-upload-archive"
+            onClick={() => file && upload.mutate({ data: { file, use_ai: zipAi && !!status.data?.ai_available } })}>
+            Upload and analyze
+          </Button>
+          <p className="mt-2 text-[11px] text-muted-foreground">Fetching from a repository URL is not supported yet.</p>
+        </Panel>
+      </div>
+
+      <Panel title="Session history" meta={list.data ? `${list.data.length} analyses` : undefined}>
+        <p className="mb-3 text-xs text-muted-foreground">Analyses belong to this anonymous browser session and expire after a short retention window{status.data ? ` (storage: ${status.data.storage})` : ""}.</p>
+        {list.isLoading ? <LoadingBlock rows={3} /> : list.isError ? <ErrorPanel error={list.error} onRetry={() => list.refetch()} /> :
+          !list.data?.length ? <EmptyState title="No analyses in this session">Start with the bundled sample above to see the full workflow.</EmptyState> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                <th className="py-2 pr-3 font-medium">Name</th><th className="py-2 pr-3 font-medium">Status</th><th className="py-2 pr-3 text-right font-medium">Files</th>
+                <th className="py-2 pr-3 text-right font-medium">Services</th><th className="py-2 pr-3 text-right font-medium">Policies</th><th className="py-2 pr-3 font-medium">Created</th><th className="py-2 pr-3 font-medium">Expires</th><th />
+              </tr></thead>
+              <tbody>
+                {list.data.map((a) => (
+                  <tr key={a.id} className="group border-b border-dashed border-border last:border-0 hover:bg-muted/40" data-testid={`row-analysis-${a.id}`}>
+                    <td className="py-2 pr-3"><Link href={`/analyses/${a.id}`} onClick={() => writeSelection({ analysisId: a.id })} className="font-medium hover:text-primary" data-testid={`link-analysis-${a.id}`}>{a.name}</Link>
+                      <div className="num text-[10.5px] text-muted-foreground">{a.source_type} · {a.id.slice(0, 8)}</div></td>
+                    <td className="py-2 pr-3"><Tag tone={severityTone(a.status)}>{a.status}</Tag></td>
+                    <td className="num py-2 pr-3 text-right">{a.file_count}</td>
+                    <td className="num py-2 pr-3 text-right">{a.service_count}</td>
+                    <td className="num py-2 pr-3 text-right">{a.policy_count}</td>
+                    <td className="py-2 pr-3 text-xs">{fmtDate(a.created_at)}</td>
+                    <td className="py-2 pr-3 text-xs text-muted-foreground">{fmtDate(a.expires_at)}</td>
+                    <td className="py-2 text-right">
+                      <Button size="icon" variant="ghost" aria-label={`Delete ${a.name}`} data-testid={`button-delete-${a.id}`} disabled={del.isPending}
+                        onClick={() => setPendingDelete({ id: a.id, name: a.name })}><Trash2 className="h-4 w-4" /></Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{pendingDelete?.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>This removes the analysis, its confirmations and all simulations. It cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction data-testid="button-confirm-delete" className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => pendingDelete && del.mutate({ analysisId: pendingDelete.id })}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}

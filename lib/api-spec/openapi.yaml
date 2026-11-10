@@ -1,0 +1,413 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 1.0.0
+  description: Source-backed retry analysis and deterministic simulation.
+servers:
+  - url: /api
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+  /v1/status:
+    get:
+      operationId: getSystemStatus
+      responses:
+        "200":
+          description: Capabilities, limits and honest validation status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemStatus" }
+  /v1/analyses:
+    get:
+      operationId: listAnalyses
+      responses:
+        "200":
+          description: Analyses owned by this anonymous session
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AnalysisSummary" }
+    post:
+      operationId: createAnalysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnalysisInput" }
+      responses:
+        "201":
+          description: Complete or partial analysis
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Analysis" }
+  /v1/analyses/archive:
+    post:
+      operationId: uploadArchive
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/ArchiveInput" }
+      responses:
+        "201":
+          description: Analyzed archive; raw bytes are not retained
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Analysis" }
+  /v1/analyses/{analysisId}:
+    parameters:
+      - { name: analysisId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getAnalysis
+      responses:
+        "200":
+          description: Analysis with graph, policies and findings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Analysis" }
+    delete:
+      operationId: deleteAnalysis
+      responses:
+        "204": { description: Analysis and associated simulations deleted }
+  /v1/analyses/{analysisId}/policies/{policyId}:
+    parameters:
+      - { name: analysisId, in: path, required: true, schema: { type: string } }
+      - { name: policyId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: confirmPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PolicyConfirmation" }
+      responses:
+        "200":
+          description: Updated analysis; original source facts retained
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Analysis" }
+  /v1/analyses/{analysisId}/edges/{edgeId}/confirm:
+    parameters:
+      - { name: analysisId, in: path, required: true, schema: { type: string } }
+      - { name: edgeId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: confirmEdge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EdgeConfirmation" }
+      responses:
+        "200":
+          description: User confirmation retained separately from original provenance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Analysis" }
+  /v1/analyses/{analysisId}/simulations:
+    parameters:
+      - { name: analysisId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: runSimulation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Scenario" }
+      responses:
+        "201":
+          description: Current and optional candidate policy simulation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Simulation" }
+  /v1/simulations/{simulationId}:
+    parameters:
+      - { name: simulationId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getSimulation
+      responses:
+        "200":
+          description: Immutable simulation snapshot
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Simulation" }
+  /v1/analyses/{analysisId}/report:
+    parameters:
+      - { name: analysisId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getReport
+      responses:
+        "200":
+          description: Evidence and simulation report, not a production guarantee
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+  /v1/validation:
+    get:
+      operationId: getValidation
+      responses:
+        "200":
+          description: Trusted bundled CI validation, if available
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationStatus" }
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+    SystemStatus:
+      type: object
+      required: [version, model_version, ai_available, ai_provider, storage, supported_parsers, limitations, max_archive_mb, max_files]
+      properties:
+        version: { type: string }
+        model_version: { type: string }
+        ai_available: { type: boolean }
+        ai_provider: { type: string }
+        storage: { type: string }
+        supported_parsers: { type: array, items: { type: string } }
+        limitations: { type: array, items: { type: string } }
+        max_archive_mb: { type: number }
+        max_files: { type: integer }
+    AnalysisInput:
+      type: object
+      required: [source_type]
+      properties:
+        source_type: { type: string, enum: [sample] }
+        use_ai: { type: boolean, default: false }
+    ArchiveInput:
+      type: object
+      required: [file]
+      properties:
+        file: { type: string, format: binary }
+        use_ai: { type: boolean, default: false }
+    Evidence:
+      type: object
+      required: [path, line_start, line_end, excerpt, sha256]
+      properties:
+        path: { type: string }
+        line_start: { type: integer }
+        line_end: { type: integer }
+        excerpt: { type: string }
+        sha256: { type: string }
+    Backoff:
+      type: object
+      required: [kind, delay_ms, multiplier, cap_ms, jitter_ms]
+      properties:
+        kind: { type: string, enum: [none, fixed, exponential, unknown] }
+        delay_ms: { type: ["number", "null"] }
+        multiplier: { type: number }
+        cap_ms: { type: ["number", "null"] }
+        jitter_ms: { type: number }
+    Policy:
+      type: object
+      required: [id, framework, symbol, service_id, edge_id, source_semantics, source_value, max_total_attempts, retry_on, backoff, per_attempt_timeout_ms, overall_deadline_ms, resolution_status, extraction_method, confidence, evidence, unresolved, confirmed, confirmation_note]
+      properties:
+        id: { type: string }
+        framework: { type: string }
+        symbol: { type: string }
+        service_id: { type: ["string", "null"] }
+        edge_id: { type: ["string", "null"] }
+        source_semantics: { type: string }
+        source_value: { type: ["integer", "null"] }
+        max_total_attempts: { type: ["integer", "null"] }
+        retry_on: { type: array, items: { type: string } }
+        backoff: { $ref: "#/components/schemas/Backoff" }
+        per_attempt_timeout_ms: { type: ["number", "null"] }
+        overall_deadline_ms: { type: ["number", "null"] }
+        resolution_status: { type: string }
+        extraction_method: { type: string }
+        confidence: { type: string }
+        evidence: { type: array, items: { $ref: "#/components/schemas/Evidence" } }
+        unresolved: { type: array, items: { type: string } }
+        confirmed: { type: boolean }
+        confirmation_note: { type: ["string", "null"] }
+        category_limits:
+          type: object
+          additionalProperties: { type: ["integer", "null"] }
+        allowed_methods:
+          anyOf:
+            - { type: array, items: { type: string } }
+            - { type: "null" }
+    ServiceNode:
+      type: object
+      required: [id, name, startup_dependencies, evidence]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        startup_dependencies: { type: array, items: { type: string } }
+        evidence: { type: array, items: { $ref: "#/components/schemas/Evidence" } }
+    DependencyEdge:
+      type: object
+      required: [id, source, target, evidence_kind, confirmed, policy_ids, evidence]
+      properties:
+        id: { type: string }
+        source: { type: string }
+        target: { type: string }
+        evidence_kind: { type: string }
+        confirmed: { type: boolean }
+        policy_ids: { type: array, items: { type: string } }
+        evidence: { type: array, items: { $ref: "#/components/schemas/Evidence" } }
+        confirmation_note: { type: ["string", "null"] }
+    Finding:
+      type: object
+      required: [severity, title, detail]
+      properties:
+        severity: { type: string }
+        title: { type: string }
+        detail: { type: string }
+    AnalysisSummary:
+      type: object
+      required: [id, name, source_type, status, created_at, expires_at, file_count, service_count, policy_count]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        source_type: { type: string }
+        status: { type: string }
+        created_at: { type: string }
+        expires_at: { type: string }
+        file_count: { type: integer }
+        service_count: { type: integer }
+        policy_count: { type: integer }
+    Analysis:
+      allOf:
+        - { $ref: "#/components/schemas/AnalysisSummary" }
+        - type: object
+          required: [fingerprint, nodes, edges, policies, findings, stages, assumptions]
+          properties:
+            fingerprint: { type: string }
+            nodes: { type: array, items: { $ref: "#/components/schemas/ServiceNode" } }
+            edges: { type: array, items: { $ref: "#/components/schemas/DependencyEdge" } }
+            policies: { type: array, items: { $ref: "#/components/schemas/Policy" } }
+            findings: { type: array, items: { $ref: "#/components/schemas/Finding" } }
+            stages: { type: array, items: { type: string } }
+            assumptions: { type: array, items: { type: string } }
+    PolicyConfirmation:
+      type: object
+      required: [max_total_attempts, note]
+      properties:
+        max_total_attempts: { type: integer, minimum: 1, maximum: 10 }
+        note: { type: string, minLength: 3, maxLength: 300 }
+        per_attempt_timeout_ms: { type: ["number", "null"], minimum: 1, maximum: 60000 }
+        overall_deadline_ms: { type: ["number", "null"], minimum: 1, maximum: 120000 }
+    EdgeConfirmation:
+      type: object
+      required: [note]
+      properties:
+        note: { type: string, minLength: 3, maxLength: 300 }
+    Scenario:
+      type: object
+      required: [name, mode, seed, requests, arrival_rate, service_time_ms, fault_latency_ms, failure_rate, per_attempt_timeout_ms, deadline_ms, concurrency, queue_limit]
+      properties:
+        name: { type: string, maxLength: 80 }
+        mode: { type: string, enum: [healthy, latency, timeout, intermittent, correlated] }
+        seed: { type: integer, minimum: 0, maximum: 2147483647 }
+        requests: { type: integer, minimum: 1, maximum: 500 }
+        arrival_rate: { type: number, minimum: 0.1, maximum: 100 }
+        service_time_ms: { type: number, minimum: 1, maximum: 5000 }
+        fault_latency_ms: { type: number, minimum: 0, maximum: 10000 }
+        failure_rate: { type: number, minimum: 0, maximum: 1 }
+        per_attempt_timeout_ms: { type: number, minimum: 1, maximum: 10000 }
+        deadline_ms: { type: number, minimum: 1, maximum: 60000 }
+        concurrency: { type: integer, minimum: 1, maximum: 100 }
+        queue_limit: { type: integer, minimum: 0, maximum: 1000 }
+        candidate_attempts: { type: ["integer", "null"], minimum: 1, maximum: 10 }
+        candidate_backoff_ms: { type: number, minimum: 0, maximum: 5000, default: 100 }
+        candidate_jitter_ms: { type: number, minimum: 0, maximum: 5000, default: 25 }
+        entry_service: { type: ["string", "null"] }
+    ServiceMetric:
+      type: object
+      required: [service_id, attempts, retries, failures, peak_concurrency, peak_queue]
+      properties:
+        service_id: { type: string }
+        attempts: { type: integer }
+        retries: { type: integer }
+        failures: { type: integer }
+        peak_concurrency: { type: integer }
+        peak_queue: { type: integer }
+    TimelinePoint:
+      type: object
+      required: [time_ms, attempts, retries]
+      properties:
+        time_ms: { type: number }
+        attempts: { type: integer }
+        retries: { type: integer }
+    SimulationResult:
+      type: object
+      required: [incoming_requests, downstream_attempts, retry_attempts, leaf_attempts, amplification, retry_ratio, succeeded, failed, deadline_misses, p50_ms, p95_ms, p99_ms, duration_ms, event_count, per_service, timeline, assumptions]
+      properties:
+        incoming_requests: { type: integer }
+        downstream_attempts: { type: integer }
+        retry_attempts: { type: integer }
+        leaf_attempts: { type: integer }
+        amplification: { type: number }
+        retry_ratio: { type: number }
+        succeeded: { type: integer }
+        failed: { type: integer }
+        deadline_misses: { type: integer }
+        p50_ms: { type: number }
+        p95_ms: { type: number }
+        p99_ms: { type: number }
+        duration_ms: { type: number }
+        event_count: { type: integer }
+        per_service: { type: array, items: { $ref: "#/components/schemas/ServiceMetric" } }
+        timeline: { type: array, items: { $ref: "#/components/schemas/TimelinePoint" } }
+        assumptions: { type: array, items: { type: string } }
+    Simulation:
+      type: object
+      required: [id, analysis_id, created_at, model_version, scenario, baseline, candidate, policies]
+      properties:
+        id: { type: string }
+        analysis_id: { type: string }
+        created_at: { type: string }
+        model_version: { type: string }
+        scenario: { $ref: "#/components/schemas/Scenario" }
+        baseline: { $ref: "#/components/schemas/SimulationResult" }
+        candidate:
+          anyOf:
+            - { $ref: "#/components/schemas/SimulationResult" }
+            - { type: "null" }
+        policies: { type: array, items: { $ref: "#/components/schemas/Policy" } }
+    MeasuredCase:
+      type: object
+      required: [name, predicted_amplification, measured_amplification, absolute_error, predicted_successes, measured_successes, logical_requests]
+      properties:
+        name: { type: string }
+        predicted_amplification: { type: number }
+        measured_amplification: { type: number }
+        absolute_error: { type: number }
+        predicted_successes: { type: integer }
+        measured_successes: { type: integer }
+        logical_requests: { type: integer }
+        predicted_deadline_misses: { type: integer }
+        measured_deadline_misses: { type: integer }
+        measured_retry_attempts: { type: integer }
+    ValidationStatus:
+      type: object
+      required: [status, detail, workflow_url, commit_sha, measured_at, cases]
+      properties:
+        status: { type: string }
+        detail: { type: string }
+        workflow_url: { type: ["string", "null"] }
+        commit_sha: { type: ["string", "null"] }
+        measured_at: { type: ["string", "null"] }
+        cases: { type: array, items: { $ref: "#/components/schemas/MeasuredCase" } }
+    Report:
+      type: object
+      required: [schema_version, generated_at, analysis, simulations, measured_validation, limitations]
+      properties:
+        schema_version: { type: string }
+        generated_at: { type: string }
+        analysis: { $ref: "#/components/schemas/Analysis" }
+        simulations: { type: array, items: { $ref: "#/components/schemas/Simulation" } }
+        measured_validation: { $ref: "#/components/schemas/ValidationStatus" }
+        limitations: { type: array, items: { type: string } }

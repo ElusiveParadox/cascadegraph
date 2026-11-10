@@ -1,0 +1,35 @@
+name: Dependency and source checks
+on:
+  pull_request:
+  push:
+    branches: [main, "feat/**"]
+permissions:
+  contents: read
+jobs:
+  dependencies:
+    name: JavaScript dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+      - run: corepack enable && corepack prepare pnpm@10.26.1 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high
+  source:
+    name: Unsafe execution guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: |
+          if grep -R -nE '\b(eval|exec)\(' src/cascadegraph_runtime; then
+            echo 'Uploaded-source execution primitives are forbidden'
+            exit 1
+          fi
+          if git ls-files | grep -E '(^|/)(\.env|[^/]+\.sqlite3)$'; then
+            echo 'Environment/data files must not be tracked'
+            exit 1
+          fi

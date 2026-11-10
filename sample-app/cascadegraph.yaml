@@ -1,0 +1,8 @@
+version: 1
+edges:
+  - source: gateway
+    target: order
+    policy_symbols: [call_order]
+  - source: order
+    target: inventory
+    policy_symbols: [INVENTORY_RETRY]
