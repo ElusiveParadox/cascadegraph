@@ -67,7 +67,7 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
             <Input value={project} maxLength={200} onChange={e => setProject(e.target.value)} placeholder="e.g. sample-app" className="num mt-1" data-testid="input-project-path" />
           </label>
         </div>
-        <div className="min-w-0 rounded-sm border border-dashed border-border p-3">
+        <div className="min-w-0 rounded-md border border-dashed border-input/70 bg-muted/40 p-3.5">
           <label className="block text-xs font-medium"><FilePlus2 className="mr-1 inline h-3.5 w-3.5" />Add source/configuration files
             <Input type="file" multiple accept=".py,.yaml,.yml,.toml,.txt" className="mt-2 max-w-full" data-testid="input-source-files"
               onChange={e => {
@@ -91,7 +91,7 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
           </div>}
         </div>
         <label className="flex items-start gap-2 text-xs">
-          <input type="checkbox" checked={ai} disabled={!limits?.ai_available} onChange={e => setAi(e.target.checked)} className="mt-0.5" data-testid="checkbox-repository-ai" />
+          <input type="checkbox" checked={ai} disabled={!limits?.ai_available} onChange={e => setAi(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" data-testid="checkbox-repository-ai" />
           <span>Use AI-assisted extraction <span className="num text-[10px] text-primary">OPT-IN, BILLED</span><span className="mt-1 block text-muted-foreground">Optional redacted source excerpts are sent to an external model and billed to credits. Leave unchecked to keep parsing local.</span></span>
         </label>
         {limits && <p className="num text-[10.5px] text-muted-foreground">ZIP/download ≤ {limits.max_archive_mb} MiB · expanded ≤ {limits.max_expanded_mb} MiB · supported source ≤ {limits.max_source_mb} MiB · each source ≤ {limits.max_file_kb} KiB</p>}

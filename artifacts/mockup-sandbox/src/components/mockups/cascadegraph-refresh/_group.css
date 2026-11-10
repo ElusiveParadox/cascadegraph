@@ -1,0 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+.cg-current {
+  --background: 42 33% 95%;
+  --foreground: 215 38% 14%;
+  --border: 38 18% 82%;
+  --primary: 18 86% 48%;
+  --muted-foreground: 215 14% 40%;
+  --app-font-serif: 'Bricolage Grotesque', sans-serif;
+  --app-font-mono: 'JetBrains Mono', monospace;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+.cg-current .font-display { font-family: var(--app-font-serif); letter-spacing: -.02em; }
+.cg-current .num { font-family: var(--app-font-mono); font-variant-numeric: tabular-nums; }

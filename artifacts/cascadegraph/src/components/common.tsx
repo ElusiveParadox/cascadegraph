@@ -8,11 +8,11 @@ import { errorMessage } from "@/lib/workspace";
 
 export function PageHeader({ kicker, title, children, actions }: { kicker: string; title: ReactNode; children?: ReactNode; actions?: ReactNode }) {
   return (
-    <header className="rise flex flex-col gap-4 border-b border-border pb-5 md:flex-row md:items-end md:justify-between">
+    <header className="rise flex flex-col gap-4 border-b border-border pb-6 md:flex-row md:items-end md:justify-between">
       <div className="min-w-0">
-        <div className="num text-[11px] uppercase tracking-[0.18em] text-primary">{kicker}</div>
-        <h1 className="font-display mt-1 [overflow-wrap:anywhere] text-2xl font-bold md:text-3xl" data-testid="text-page-title">{title}</h1>
-        {children && <div className="mt-2 max-w-3xl text-sm text-muted-foreground">{children}</div>}
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary"><span aria-hidden className="h-1.5 w-1.5 rounded-full bg-primary" />{kicker}</div>
+        <h1 className="font-display mt-2 [overflow-wrap:anywhere] text-[26px] leading-tight md:text-[32px]" data-testid="text-page-title">{title}</h1>
+        {children && <div className="mt-2.5 max-w-3xl text-[14.5px] leading-relaxed text-muted-foreground">{children}</div>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </header>
@@ -21,14 +21,14 @@ export function PageHeader({ kicker, title, children, actions }: { kicker: strin
 
 export function Panel({ title, meta, children, className, id }: { title?: ReactNode; meta?: ReactNode; children: ReactNode; className?: string; id?: string }) {
   return (
-    <section id={id} className={cn("rise min-w-0 max-w-full rounded-md border border-card-border bg-card", className)}>
+    <section id={id} className={cn("rise min-w-0 max-w-full rounded-lg border border-card-border bg-card shadow-[0_1px_2px_hsl(260_8%_8%/0.04)]", className)}>
       {title && (
-        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2.5">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-foreground/80">{title}</h2>
+        <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-3">
+          <h2 className="text-[13px] font-semibold tracking-tight text-foreground">{title}</h2>
           {meta && <div className="num text-[11px] text-muted-foreground">{meta}</div>}
         </div>
       )}
-      <div className="min-w-0 p-4">{children}</div>
+      <div className="min-w-0 p-5">{children}</div>
     </section>
   );
 }
@@ -61,8 +61,8 @@ export function LoadingBlock({ rows = 4 }: { rows?: number }) {
 
 export function EmptyState({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="grid-paper rounded-md border border-dashed border-border px-6 py-10 text-center">
-      <div className="font-display text-lg font-semibold">{title}</div>
+    <div className="grid-paper rounded-lg border border-dashed border-input/70 bg-background/60 px-6 py-12 text-center">
+      <div className="font-display text-lg">{title}</div>
       {children && <div className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{children}</div>}
       {action && <div className="mt-4 flex justify-center">{action}</div>}
     </div>
@@ -71,7 +71,7 @@ export function EmptyState({ title, children, action }: { title: string; childre
 
 export function Unknown({ children = "unknown" }: { children?: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-sm border border-dashed border-chart-3/70 bg-chart-3/10 px-1.5 py-px text-[11px] font-medium text-[hsl(38_80%_30%)] dark:text-chart-3">
+    <span className="inline-flex items-center gap-1 rounded-sm border border-dashed border-chart-3/70 bg-chart-3/10 px-1.5 py-px text-[11px] font-medium tone-warn-text">
       <HelpCircle className="h-3 w-3" />{children}
     </span>
   );
@@ -84,7 +84,7 @@ export function Value({ v, unit }: { v: number | null | undefined; unit?: string
 
 const toneMap: Record<string, string> = {
   ok: "border-chart-2/40 bg-chart-2/10 text-chart-2",
-  warn: "border-chart-3/50 bg-chart-3/10 text-[hsl(38_80%_30%)] dark:text-chart-3",
+  warn: "border-chart-3/50 bg-chart-3/10 tone-warn-text",
   bad: "border-destructive/40 bg-destructive/10 text-destructive",
   info: "border-border bg-muted text-muted-foreground",
   hot: "border-primary/40 bg-primary/10 text-primary",
@@ -121,13 +121,13 @@ export function EvidenceList({ evidence, testPrefix = "evidence" }: { evidence: 
             <span className="num shrink-0 text-muted-foreground">L{ev.line_start}{ev.line_end !== ev.line_start ? `–${ev.line_end}` : ""}</span>
           </button>
           {open === i && (
-            <div className="bg-[hsl(215_36%_11%)] text-[hsl(40_25%_88%)]">
+            <div className="code-surface">
               <pre className="num max-w-full overflow-x-auto px-0 py-2 text-[11.5px] leading-5">
                 {ev.excerpt.split("\n").map((line, j) => (
-                  <div key={j} className="flex"><span className="w-12 shrink-0 select-none pr-3 text-right text-[hsl(215_14%_50%)]">{ev.line_start + j}</span><span className="pr-3">{line || " "}</span></div>
+                  <div key={j} className="flex"><span className="w-12 shrink-0 select-none pr-3 text-right code-gutter">{ev.line_start + j}</span><span className="pr-3">{line || " "}</span></div>
                 ))}
               </pre>
-              <div className="num truncate border-t border-white/10 px-3 py-1 text-[10px] text-[hsl(215_14%_60%)]" title={ev.sha256}>sha256 {ev.sha256}</div>
+              <div className="num truncate border-t border-white/10 px-3 py-1 text-[10px] code-gutter" title={ev.sha256}>sha256 {ev.sha256}</div>
             </div>
           )}
         </li>

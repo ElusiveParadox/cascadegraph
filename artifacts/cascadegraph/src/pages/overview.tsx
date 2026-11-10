@@ -18,7 +18,7 @@ import { fmtDate, readSelection, writeSelection } from "@/lib/workspace";
 
 function AiOptIn({ id, checked, onChange, available }: { id: string; checked: boolean; onChange: (v: boolean) => void; available: boolean | undefined }) {
   return (
-    <div className="rounded-sm border border-dashed border-border bg-muted/40 p-3">
+    <div className="rounded-md border border-dashed border-input/70 bg-muted/50 p-3.5">
       <label htmlFor={id} className="flex items-start gap-2.5 text-sm">
         <Checkbox id={id} checked={checked} disabled={!available} onCheckedChange={(v) => onChange(v === true)} data-testid={`checkbox-${id}`} className="mt-0.5" />
         <span>
@@ -91,10 +91,11 @@ export default function Overview() {
         ? <ErrorPanel error={status.error ?? list.error} title="Workspace could not be initialized" onRetry={() => { status.refetch(); list.refetch(); }} />
         : <p role="status" className="text-xs text-muted-foreground">Preparing browser session and server limits…</p>)}
 
-      <SourceIntake limits={status.data} disabled={create.isPending || upload.isPending || !ready} onBusyChange={setImportBusy} onAnalyzed={onCreated}
-        initialRepository={parameters.get("repository") ?? ""} initialRef={parameters.get("ref") ?? ""} initialProject={parameters.get("project") ?? "."} />
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,1fr)]">
+        <SourceIntake limits={status.data} disabled={create.isPending || upload.isPending || !ready} onBusyChange={setImportBusy} onAnalyzed={onCreated}
+          initialRepository={parameters.get("repository") ?? ""} initialRef={parameters.get("ref") ?? ""} initialProject={parameters.get("project") ?? "."} />
 
-      <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-2 xl:grid-cols-1">
         <Panel title={<span className="flex items-center gap-2"><Box className="h-3.5 w-3.5" />Bundled sample</span>} meta="no upload">
           <p className="text-sm text-muted-foreground">A small multi-service repository with known retry layering. Useful to learn the workflow before uploading your own code.</p>
           <div className="mt-3"><AiOptIn id="sample-ai" checked={sampleAi} onChange={setSampleAi} available={status.data?.ai_available} /></div>
@@ -105,7 +106,7 @@ export default function Overview() {
         </Panel>
         <Panel title={<span className="flex items-center gap-2"><Archive className="h-3.5 w-3.5" />ZIP archive</span>} meta={status.data ? `≤ ${status.data.max_archive_mb} MB · ≤ ${status.data.max_files} files` : "limits loading"}>
           <button type="button" onClick={() => fileRef.current?.click()} data-testid="button-choose-archive"
-            className="grid-paper flex w-full flex-col items-center gap-1 rounded-sm border border-dashed border-border px-4 py-5 text-sm transition-colors hover:border-primary">
+            className="grid-paper flex w-full flex-col items-center gap-1 rounded-md border border-dashed border-input px-4 py-6 text-sm transition-colors hover:border-primary hover:bg-primary/[0.03]">
             <Upload className="h-4 w-4 text-muted-foreground" />
             {file ? <span className="num">{file.name} · {(file.size / 1024).toFixed(1)} KB</span> : <span className="text-muted-foreground">Choose a .zip of your repository</span>}
           </button>
@@ -122,6 +123,7 @@ export default function Overview() {
           </Button>
           <p className="mt-2 text-[11px] text-muted-foreground">ZIPs may contain irrelevant binary assets; they are skipped without execution. Supported source, expansion and entry-count limits still apply.</p>
         </Panel>
+      </div>
       </div>
 
       <Panel title="Session history" meta={list.data ? `${list.data.length} analyses` : undefined}>

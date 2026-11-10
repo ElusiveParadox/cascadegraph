@@ -16,6 +16,18 @@
   `pnpm --filter @workspace/cascadegraph test`, and `git diff --check` passed.
   No production code, managed preview process or shared database was changed.
 
+## Product theme and desktop layout — 2026-11-10
+- Applied the requested five-color palette, Poppins interface typography and a
+  restrained Georgia accent through the shared theme, navigation and panels.
+- Placed repository intake beside sample/ZIP options on wide desktop screens;
+  retained stacked layouts on smaller screens, all existing forms and notices.
+- Added visible keyboard focus, active-page navigation semantics, skip-to-content,
+  reduced-motion support and unrestricted viewport zoom.
+- Workspace TypeScript, frontend helper/retry tests and the frontend production
+  build passed. Verified 1440px desktop and 390px mobile overview screenshots;
+  no application errors appeared in those captures. The build reports existing
+  non-blocking sourcemap warnings in shared tooltip/select components.
+
 ## Imported preview startup repair — 2026-11-10
 - Startup logs showed `vite: not found` because JavaScript dependencies were
   absent. Restored them using the unchanged frozen pnpm lockfile and restarted
