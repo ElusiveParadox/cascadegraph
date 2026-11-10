@@ -81,27 +81,26 @@ export function Shell({ children }: { children: ReactNode }) {
   const nav = (
     <nav aria-label="Workspace" className="flex flex-col gap-0.5 px-3">
       <div className="px-2.5 pb-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">Workflow</div>
-      {items.map((it, i) => {
+      {items.map((it) => {
         const active = it.match === "/" ? location === "/" : location.startsWith(it.match);
         const Icon = it.icon;
         const inner = (
           <>
-            <span className="num w-5 text-[10px] text-sidebar-foreground/50">{String(i + 1).padStart(2, "0")}</span>
             <Icon className="h-4 w-4" />
             <span className="flex-1">{it.label}</span>
           </>
         );
         if (!it.href) {
           return (
-            <span key={it.label} aria-disabled="true" title={it.hint} className="flex cursor-not-allowed items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-sidebar-foreground/45" data-testid={`link-nav-${it.match.replace("/", "") || "home"}`}>
+            <span key={it.label} aria-disabled="true" title={it.hint} className="flex cursor-not-allowed items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-sidebar-foreground/45 transition-colors hover:text-sidebar-primary" data-testid={`link-nav-${it.match.replace("/", "") || "home"}`}>
               {inner}
             </span>
           );
         }
         return (
           <Link key={it.label} href={it.href} data-testid={`link-nav-${it.match.replace("/", "") || "home"}`} aria-current={active ? "page" : undefined}
-            className={cn("relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors duration-150",
-              active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground")}>
+            className={cn("relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors duration-150 hover:text-sidebar-primary focus-visible:text-sidebar-primary active:text-sidebar-primary",
+              active ? "bg-sidebar-accent text-sidebar-primary" : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60")}>
             {active && <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r bg-sidebar-primary" />}
             {inner}
           </Link>

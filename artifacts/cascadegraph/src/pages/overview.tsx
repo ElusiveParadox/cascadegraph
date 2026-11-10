@@ -83,7 +83,7 @@ export default function Overview() {
 
   return (
     <>
-      <PageHeader kicker="00 / overview" title="Where do your retries multiply?">
+      <PageHeader kicker="overview" title="Where do your retries multiply?">
         Point CascadeGraph at service source. It extracts retry policies with file and line evidence, builds the call graph, and replays seeded failure scenarios so you can compare a baseline against a candidate policy.
       </PageHeader>
 
