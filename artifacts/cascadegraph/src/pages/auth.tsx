@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { HandleSSOCallback, SignIn, SignUp } from "@clerk/react";
@@ -9,16 +10,34 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 const embeddedAppearance = {
   elements: {
     cardBox: "bg-[#FBFBF9] w-[440px] max-w-full !rounded-none !border-0 !shadow-none",
+    socialButtons: "cg-social-providers !flex !flex-col !gap-2",
   },
 };
 
 function AccountCard({ children }: { children: ReactNode }) {
+  const card = useRef<HTMLDivElement>(null);
+  const [socialGroup, setSocialGroup] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const root = card.current;
+    if (!root) return;
+    // Clerk mounts its UI asynchronously and replaces it between auth steps.
+    // Portal into its named social section, never into a separate footer.
+    const sync = () => setSocialGroup(root.querySelector<HTMLElement>(".cg-social-providers"));
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
   return (
-    <div className="mx-auto w-[440px] max-w-full overflow-hidden rounded-xl border border-[#E4E4E6] bg-[#FBFBF9] shadow-sm">
+    <div ref={card} className="mx-auto w-[440px] max-w-full overflow-hidden rounded-xl border border-[#E4E4E6] bg-[#FBFBF9] shadow-sm">
       {children}
-      <GitHubSignIn />
+      {socialGroup && createPortal(<GitHubSignIn />, socialGroup)}
     </div>
   );
+}
+
+function AuthLoading() {
+  return <div role="status" className="flex min-h-72 items-center justify-center p-8 text-sm text-muted-foreground">Loading sign-in options…</div>;
 }
 
 function AuthFrame({ eyebrow, children }: { eyebrow: string; children: ReactNode }) {
@@ -61,7 +80,7 @@ export function SignInPage() {
   const { available } = useAuthState();
   return (
     <AuthFrame eyebrow="evidence first, conclusions second">
-      {available ? <AccountCard><SignIn appearance={embeddedAppearance} routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} /></AccountCard> : <Unavailable />}
+      {available ? <AccountCard><SignIn fallback={<AuthLoading />} appearance={embeddedAppearance} routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} /></AccountCard> : <Unavailable />}
     </AuthFrame>
   );
 }
@@ -70,7 +89,7 @@ export function SignUpPage() {
   const { available } = useAuthState();
   return (
     <AuthFrame eyebrow="keep your analyses with your account">
-      {available ? <AccountCard><SignUp appearance={embeddedAppearance} routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} /></AccountCard> : <Unavailable />}
+      {available ? <AccountCard><SignUp fallback={<AuthLoading />} appearance={embeddedAppearance} routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} /></AccountCard> : <Unavailable />}
     </AuthFrame>
   );
 }

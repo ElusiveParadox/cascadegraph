@@ -30,7 +30,7 @@ export function GitHubSignIn() {
   }
 
   return (
-    <div className="border-t border-[#E4E4E6] bg-[#FBFBF9] px-6 py-5 sm:px-10">
+    <div className="w-full" data-testid="github-provider-option">
       <button type="button" onClick={startGitHub} disabled={busy || !signIn}
         aria-busy={busy} data-testid="button-sign-in-github"
         className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#D6D6D9] bg-[#F5F5F2] px-4 py-2 text-sm font-medium text-[#131215] transition-colors hover:border-[#96959A] hover:bg-[#E4E4E6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#E6002B] disabled:cursor-wait disabled:opacity-60">
