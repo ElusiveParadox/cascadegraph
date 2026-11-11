@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FilePlus2, Github, Loader2, X } from "lucide-react";
 import { useAnalyzeRepository, useAnalyzeSources, type Analysis, type SystemStatus } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { ErrorPanel, Panel } from "@/components/common";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { SOURCE_ACCEPT, sourceSelectionError } from "@/lib/file-intake";
+import { collectDirectoryEntries, collectFolderFiles, type Discovery, type SourceEntry, type SourceFile } from "@/lib/directory-intake";
 
-type SourceFile = { file: File; path: string };
 type Props = {
   limits?: SystemStatus;
   disabled: boolean;
@@ -26,6 +26,9 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
   const [ai, setAi] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [discovery, setDiscovery] = useState<Discovery | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const discoveryLock = useRef(false);
   const repository = useAnalyzeRepository({ mutation: { onSuccess: onAnalyzed } });
   const sources = useAnalyzeSources({ mutation: { onSuccess: onAnalyzed } });
   const busy = repository.isPending || sources.isPending;
@@ -41,20 +44,38 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
   if (files.some(f => !f.path.trim() || f.path.startsWith("/") || f.path.includes("..") || f.path.includes("\\"))) {
     errors.push("File paths must be relative, without traversal or backslashes.");
   }
-  const intakeDisabled = disabled || busy || !limits;
+  const intakeDisabled = disabled || busy || discovering || !limits;
+  const prefix = project.trim() && project.trim() !== "." ? project.trim().replace(/\/+$/, "") + "/" : "";
+  const addFolder = async (read: () => Discovery | Promise<Discovery>) => {
+    if (intakeDisabled || discoveryLock.current) return;
+    discoveryLock.current = true;
+    setDiscovering(true); setSelectionError(null); setDiscovery(null);
+    try {
+      const result = await read();
+      setFiles(current => [...current, ...result.files.map(source => ({ ...source, path: prefix + source.path }))]);
+      setDiscovery(result);
+    } catch (error) {
+      setSelectionError(error instanceof Error ? error.message : "Folder could not be read.");
+    } finally {
+      discoveryLock.current = false; setDiscovering(false);
+    }
+  };
+  const addEntries = (entries: SourceEntry[]) => {
+    if (limits) void addFolder(() => collectDirectoryEntries(entries, limits, files.map(f => f.file)));
+  };
   const addFiles = (incoming: File[]) => {
     if (intakeDisabled || !limits || !incoming.length) return;
     const error = sourceSelectionError([...files.map(f => f.file), ...incoming], limits);
     setSelectionError(error);
+    setDiscovery(null);
     if (error) return;
-    const prefix = project.trim() && project.trim() !== "." ? project.trim().replace(/\/+$/, "") + "/" : "";
     setFiles(current => [...current, ...incoming.map(file => ({ file, path: file.webkitRelativePath || prefix + file.name }))]);
   };
   return (
     <Panel title={<span className="flex items-center gap-2"><Github className="h-4 w-4" />Repository URL / source files</span>} meta="public GitHub · read-only">
       <form className="space-y-4" data-testid="form-source-intake" onSubmit={e => {
         e.preventDefault(); setSubmitted(true);
-        if (errors.length || busy || disabled || !limits) return;
+        if (errors.length || intakeDisabled || discoveryLock.current || !limits) return;
         repository.reset(); sources.reset();
         if (files.length) {
           sources.mutate({ data: { files: files.map(f => f.file), paths: files.map(f => f.path.trim()),
@@ -76,13 +97,28 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
             <Input value={project} maxLength={200} onChange={e => setProject(e.target.value)} placeholder="e.g. sample-app" className="num mt-1" data-testid="input-project-path" />
           </label>
         </div>
-        <FileDropZone disabled={intakeDisabled} onFiles={addFiles} testId="drop-source-files">
+        <FileDropZone disabled={intakeDisabled} onFiles={addFiles} onEntries={addEntries} testId="drop-source-files">
           <label className="block text-xs font-medium"><FilePlus2 className="mr-1 inline h-3.5 w-3.5" />Add source/configuration files
             <Input type="file" multiple accept={SOURCE_ACCEPT} disabled={intakeDisabled} className="mt-2 max-w-full" data-testid="input-source-files"
               onChange={e => {
                 addFiles(Array.from(e.target.files ?? [])); e.target.value = "";
               }} />
           </label>
+          <label className="mt-3 block text-xs font-medium">Add a repository folder
+            <Input type="file" multiple {...{ webkitdirectory: "", directory: "" }} disabled={intakeDisabled}
+              className="mt-2 max-w-full" data-testid="input-source-folder" onChange={e => {
+                const selected = e.target.files;
+                if (selected?.length && limits) void addFolder(() => collectFolderFiles(selected, limits, files.map(f => f.file)));
+                e.target.value = "";
+              }} />
+          </label>
+          <p className="mt-1 text-xs text-muted-foreground">Choose the repository root. Its name is removed; nested paths are kept under the optional project folder above. If folder selection or drops are unavailable in your browser, use individual files or a ZIP. Nothing is sent until you choose Analyze.</p>
+          {discovering && <p role="status" className="mt-2 text-xs">Reading folder entries…</p>}
+          {discovery && discovery.skippedCount > 0 && <div role="note" className="mt-2 break-words text-xs text-muted-foreground">
+            <p>{discovery.skippedCount} entries skipped. {discovery.files.length} supported files added.</p>
+            <ul>{discovery.skipped.map((message, i) => <li key={i}>{message}</li>)}</ul>
+            {discovery.skippedCount > discovery.skipped.length && <p>Showing the first {discovery.skipped.length} skipped entries.</p>}
+          </div>}
           {selectionError && <p role="alert" className="mt-2 text-xs text-destructive">{selectionError} No files were added; your previous selection is unchanged.</p>}
           <p role="status" className="num mt-2 text-xs text-muted-foreground">{files.length} source files selected · {(files.reduce((sum, f) => sum + f.file.size, 0) / 1024).toFixed(1)} KiB total</p>
           {limits && <p className="mt-1 text-xs text-muted-foreground">Up to {limits.max_source_files} files · {limits.max_file_kb} KiB each · {limits.max_source_mb} MiB total</p>}
@@ -91,9 +127,9 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
             {files.map((source, index) => (
               <div key={`${source.file.name}-${index}`} className="flex min-w-0 items-center gap-2">
                 <div className="min-w-0 flex-1"><span className="block truncate text-[11px] text-muted-foreground">{source.file.name} · {(source.file.size / 1024).toFixed(1)} KiB</span>
-                  <Input aria-label={`Relative path for ${source.file.name}`} value={source.path} maxLength={300} className="num mt-1"
+                  <Input disabled={intakeDisabled} aria-label={`Relative path for ${source.file.name}`} value={source.path} maxLength={300} className="num mt-1"
                     data-testid={`input-source-path-${index}`} onChange={e => setFiles(current => current.map((f, i) => i === index ? { ...f, path: e.target.value } : f))} /></div>
-                <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${source.file.name}`}
+                <Button disabled={intakeDisabled} type="button" variant="ghost" size="icon" aria-label={`Remove ${source.file.name}`}
                   onClick={() => { setFiles(current => current.filter((_, i) => i !== index)); setSelectionError(null); }}><X className="h-4 w-4" /></Button>
               </div>
             ))}
@@ -108,7 +144,7 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
         {(submitted || files.length > 0) && errors.length > 0 && <ul role="alert" className="space-y-1 text-xs text-destructive">{errors.map(error => <li key={error}>{error}</li>)}</ul>}
         {repository.isError && <ErrorPanel error={repository.error} title="Repository could not be analyzed" />}
         {sources.isError && <ErrorPanel error={sources.error} title="Source files could not be analyzed" />}
-        <Button type="submit" disabled={disabled || busy || !limits} data-testid="button-analyze-repository">
+        <Button type="submit" disabled={intakeDisabled} data-testid="button-analyze-repository">
           {busy ? <><Loader2 className="mr-1 h-4 w-4 animate-spin" />Fetching / analyzing source…</> : files.length ? "Analyze source files" : "Analyze repository"}
         </Button>
         <p className="text-[11px] text-muted-foreground">Supported extraction remains Compose, Python Tenacity/urllib3 and Istio. Unsupported languages or ambiguous topology are reported as incomplete—not invented.</p>

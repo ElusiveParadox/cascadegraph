@@ -1,5 +1,24 @@
 # Progress
 
+## Repository folder intake — 2026-11-11
+- Added an optional native directory picker and directory drops alongside the
+  unchanged individual-file picker. The selected root name is removed, nested
+  paths are retained, and the optional project prefix is applied consistently.
+- Sequential browser directory reads stop at advertised entry/source-count,
+  per-source and total-byte limits, including the existing selection. Failed
+  batches leave previous files untouched; discovery never submits an analysis.
+- Unsupported, ignored and unreadable entries are reported with bounded details.
+  Ignored directories are not traversed; recursion has a depth guard.
+- Passed `pnpm run typecheck`, frontend helper checks (18 tests plus workspace
+  helpers), `uv run --frozen pytest` (112 tests), and
+  `uv run --frozen ruff check src tests`. Folder checks cover nested/batched
+  discovery, mixed roots, ignored/unreadable entries, oversized trees and exact
+  byte/count boundaries. No interactive browser journey is claimed.
+- Production frontend build passed with the required temporary `PORT` and
+  `BASE_PATH` values (existing source-map/chunk-size warnings only). Managed
+  web/API workflows started cleanly; overview screenshot showed both native
+  pickers and explicit Analyze control, with no browser errors.
+
 ## PostgreSQL migration and usability verification — 2026-11-10
 - Replaced live SQLite process calls with a lifecycle-owned bounded async
   PostgreSQL pool. Preserved owner checks, cookies, retention, quotas,
