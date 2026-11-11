@@ -21,6 +21,13 @@
 - Google and email were visible. The user reported enabling GitHub; a fresh
   sign-in capture still showed no GitHub button, so environment/provider
   configuration needs confirmation. No fake provider button was added.
+- Follow-up: the user confirmed GitHub was enabled in both environments.
+  Verified canonical frontend wiring, checked current allowed SDK versions,
+  and restarted both services. A fresh browser response from Clerk returned
+  HTTP 200 with `Cache-Control: no-store` and only `oauth_google` in its live
+  social configuration; `oauth_github` was absent. The remaining mismatch is
+  not a hidden UI button or a browser cache. Provider-panel evidence is needed
+  to check save/validation state or a managed-instance mismatch.
 
 ## Repeated source-path conflict resolution — 2026-11-11
 - Source picks and folder discovery stage conflicting batches before changing
