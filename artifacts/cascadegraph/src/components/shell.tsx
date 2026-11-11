@@ -1,12 +1,14 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { BookOpen, FileText, FlaskConical, GitCompare, Home, Network, ShieldCheck, SlidersHorizontal, Menu, X, LogIn, LogOut, KeyRound } from "lucide-react";
+import { BookOpen, FileText, FlaskConical, GitCompare, Home, Network, ShieldCheck, SlidersHorizontal, Menu, X, LogIn, LogOut, Settings } from "lucide-react";
 import { useAuthState } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { errorMessage, readSelection, type Selection } from "@/lib/workspace";
 
 function AccountFooter() {
   const auth = useAuthState();
+  const [location] = useLocation();
+  const settingsActive = location === "/settings" || location.startsWith("/settings/");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const onSignOut = async () => {
@@ -21,6 +23,17 @@ function AccountFooter() {
   };
   return (
     <div className="mt-auto border-t border-sidebar-border px-3 py-3 text-[12.5px]" data-testid="section-account">
+      {auth.ready && auth.signedIn && (
+        <div className="px-2.5 pb-2 min-w-0">
+          {auth.displayName && <div className="truncate text-sidebar-foreground" data-testid="text-account-name">{auth.displayName}</div>}
+          {auth.email && <div className="truncate font-editorial text-sidebar-foreground/60" data-testid="text-account-email">{auth.email}</div>}
+        </div>
+      )}
+      <Link href="/settings" aria-current={settingsActive ? "page" : undefined} data-testid="link-nav-settings"
+        className={cn("mb-1 flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-primary focus-visible:text-sidebar-primary",
+          settingsActive ? "bg-sidebar-accent text-sidebar-primary" : "text-sidebar-foreground/80")}>
+        <Settings className="h-4 w-4" />Settings
+      </Link>
       {!auth.available ? (
         <p className="px-2.5 py-1.5 text-sidebar-foreground/60" data-testid="text-auth-unavailable">
           Sign-in unavailable in this environment. Working as an anonymous browser session.
@@ -29,10 +42,6 @@ function AccountFooter() {
         <div className="mx-2.5 my-2 h-4 w-32 animate-pulse rounded bg-sidebar-accent" aria-label="Loading account" />
       ) : auth.signedIn ? (
         <>
-          <div className="px-2.5 pb-2 min-w-0">
-            {auth.displayName && <div className="truncate text-sidebar-foreground" data-testid="text-account-name">{auth.displayName}</div>}
-            {auth.email && <div className="truncate font-editorial text-sidebar-foreground/60" data-testid="text-account-email">{auth.email}</div>}
-          </div>
           <button type="button" onClick={onSignOut} disabled={pending}
             className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-primary focus-visible:text-sidebar-primary disabled:opacity-60"
             data-testid="button-sign-out">
@@ -124,7 +133,6 @@ export function Shell({ children }: { children: ReactNode }) {
     { href: s ? `/comparison/${s}` : null, label: "Comparison", icon: GitCompare, match: "/comparison", hint: "run a simulation" },
     { href: a ? `/reports/${a}` : null, label: "Report", icon: FileText, match: "/reports", hint: "select an analysis" },
     { href: "/validation", label: "Validation", icon: ShieldCheck, match: "/validation" },
-    { href: "/settings/ai", label: "AI settings", icon: KeyRound, match: "/settings/ai" },
     { href: "/help", label: "Scope & limits", icon: BookOpen, match: "/help" },
   ];
   const nav = (

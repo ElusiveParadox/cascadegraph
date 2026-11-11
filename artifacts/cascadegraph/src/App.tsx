@@ -10,7 +10,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Shell } from '@/components/shell';
 import NotFound from '@/pages/not-found';
 import Overview from '@/pages/overview';
-import AiSettingsPage from '@/pages/ai-settings';
+import SettingsPage from '@/pages/settings';
 import { setOwnAiConnection } from '@workspace/api-client-react';
 import AnalysisPage from '@/pages/analysis';
 import PoliciesPage from '@/pages/policies';
@@ -132,7 +132,9 @@ function WorkspaceRoutes() {
             <Route path="/comparison/:id" component={ComparisonPage} />
             <Route path="/reports/:id" component={ReportPage} />
             <Route path="/validation" component={ValidationPage} />
-            <Route path="/settings/ai" component={AiSettingsPage} />
+            <Route path="/settings" component={SettingsPage} />
+            <Route path="/settings/ai" component={SettingsPage} />
+            <Route path="/settings/account" component={SettingsPage} />
             <Route path="/help" component={HelpPage} />
             <Route component={NotFound} />
           </Switch>

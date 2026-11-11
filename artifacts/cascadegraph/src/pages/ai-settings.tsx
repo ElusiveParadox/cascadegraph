@@ -1,8 +1,7 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "wouter";
-import { ArrowLeft, KeyRound, Trash2 } from "lucide-react";
+import { KeyRound, Trash2 } from "lucide-react";
 import { setOwnAiConnection, type OwnAiProvider } from "@workspace/api-client-react";
-import { KV, PageHeader, Panel, Tag } from "@/components/common";
+import { KV, Panel, Tag } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,13 +47,10 @@ export default function AiSettingsPage() {
 
   return (
     <>
-      <PageHeader
-        kicker="AI provider"
-        title="Use your own AI API key"
-        actions={<Button asChild variant="outline" size="sm"><Link href="/" data-testid="link-back-workbench"><ArrowLeft className="mr-1.5 h-3.5 w-3.5" />Back to workbench</Link></Button>}
-      >
-        Optional. AI-assisted extraction stays off until you tick the opt-in on an analysis form. Choosing a key here sends nothing.
-      </PageHeader>
+      <div>
+        <h2 className="font-display text-xl">Use your own AI API key</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">Optional. AI-assisted extraction stays off until you tick the opt-in on an analysis form. Choosing a key here sends nothing.</p>
+      </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_340px]">
         <Panel title="Key for this tab" meta="memory only">
