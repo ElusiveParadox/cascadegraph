@@ -18,8 +18,10 @@ import { EmptyState, ErrorPanel, LoadingBlock, PageHeader, Panel, Tag, severityT
 import { useToast } from "@/hooks/use-toast";
 import { fmtDate, readSelection, writeSelection } from "@/lib/workspace";
 import { useAuthState } from "@/lib/auth-context";
+import { useOwnAi } from "@/lib/use-own-ai";
 
 function AiOptIn({ id, checked, onChange, available }: { id: string; checked: boolean; onChange: (v: boolean) => void; available: boolean | undefined }) {
+  const ownAi = useOwnAi();
   return (
     <div className="rounded-md border border-dashed border-input/70 bg-muted/50 p-3.5">
       <label htmlFor={id} className="flex items-start gap-2.5 text-sm">
@@ -28,16 +30,18 @@ function AiOptIn({ id, checked, onChange, available }: { id: string; checked: bo
           <span className="font-medium">Use AI-assisted extraction</span> <Tag tone={available ? "warn" : "info"}>{available ? "opt-in, billed" : "unavailable"}</Tag>
           <span className="mt-1 block text-xs text-muted-foreground">
             {available
-              ? "When enabled, relevant source excerpts are sent to an external model provider and the call is billed to your credits. Deterministic parsing runs either way; leave unchecked to keep source local."
-              : "No AI provider is configured on this server. Analysis uses deterministic parsers only."}
+              ? `Relevant source excerpts are sent to ${ownAi ? `${ownAi.provider} using your key, billed by that provider` : "the managed model provider, billed to your Replit credits"}. Deterministic parsing runs either way. Leave unchecked to avoid AI requests.`
+              : "No managed AI provider is available. Add your own API key in AI settings, or use deterministic parsing."}
           </span>
         </span>
       </label>
+      <Link href="/settings/ai" className="mt-2 inline-flex text-xs text-primary underline underline-offset-2">AI settings · use your own API key</Link>
     </div>
   );
 }
 
 export default function Overview() {
+  const ownAi = useOwnAi();
   const { signedIn } = useAuthState();
   const qc = useQueryClient();
   const [, nav] = useLocation();
@@ -109,9 +113,9 @@ export default function Overview() {
       <div className="grid min-w-0 gap-5 lg:grid-cols-2 xl:grid-cols-1">
         <Panel title={<span className="flex items-center gap-2"><Box className="h-3.5 w-3.5" />Bundled sample</span>} meta="no upload">
           <p className="text-sm text-muted-foreground">A small multi-service repository with known retry layering. Useful to learn the workflow before uploading your own code.</p>
-          <div className="mt-3"><AiOptIn id="sample-ai" checked={sampleAi} onChange={setSampleAi} available={status.data?.ai_available} /></div>
+          <div className="mt-3"><AiOptIn id="sample-ai" checked={sampleAi} onChange={setSampleAi} available={!!ownAi || status.data?.ai_available} /></div>
           <Button className="mt-3" disabled={busy} data-testid="button-analyze-sample"
-            onClick={() => create.mutate({ data: { source_type: "sample", use_ai: sampleAi && !!status.data?.ai_available } })}>
+            onClick={() => create.mutate({ data: { source_type: "sample", use_ai: sampleAi && (!!ownAi || !!status.data?.ai_available) } })}>
             Analyze sample <ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
         </Panel>
@@ -132,9 +136,9 @@ export default function Overview() {
           <label className="mt-3 block text-xs font-medium">Project folder inside ZIP <span className="font-normal text-muted-foreground">optional</span>
             <Input value={zipProject} maxLength={200} onChange={e => setZipProject(e.target.value)} placeholder="e.g. sample-app" className="num mt-1" data-testid="input-zip-project" />
           </label>
-          <div className="mt-3"><AiOptIn id="zip-ai" checked={zipAi} onChange={setZipAi} available={status.data?.ai_available} /></div>
+          <div className="mt-3"><AiOptIn id="zip-ai" checked={zipAi} onChange={setZipAi} available={!!ownAi || status.data?.ai_available} /></div>
           <Button className="mt-3" variant="secondary" disabled={!file || busy || tooBig} data-testid="button-upload-archive"
-            onClick={() => file && upload.mutate({ data: { file, use_ai: zipAi && !!status.data?.ai_available, project_path: zipProject.trim() || "." } })}>
+            onClick={() => file && upload.mutate({ data: { file, use_ai: zipAi && (!!ownAi || !!status.data?.ai_available), project_path: zipProject.trim() || "." } })}>
             Upload and analyze
           </Button>
           <p className="mt-2 text-[11px] text-muted-foreground">ZIPs may contain irrelevant binary assets; they are skipped without execution. Supported source, expansion and entry-count limits still apply.</p>

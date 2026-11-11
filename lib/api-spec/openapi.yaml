@@ -3,6 +3,15 @@ info:
   title: Api
   version: 1.0.0
   description: Source-backed retry analysis and deterministic simulation.
+x-custom-ai-connection:
+  description: |
+    AI-enabled creation at /v1/analyses and its /archive, /repository and /sources
+    routes optionally accepts request-local X-CascadeGraph-AI-Provider (openai
+    or openrouter), X-CascadeGraph-AI-Model (1–150 model ID characters) and
+    X-CascadeGraph-AI-Key (10–1024 printable characters). All three headers
+    require explicit use_ai=true. User keys override the managed AI connection
+    for that request only, are never stored or returned, and are sent only to
+    fixed HTTPS provider origins. They do not authenticate the app user.
 servers:
   - url: /api
 paths:

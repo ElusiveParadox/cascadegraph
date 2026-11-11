@@ -1,3 +1,5 @@
+import { ownAiHeaders } from "./own-ai";
+
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };
@@ -336,6 +338,7 @@ export async function customFetch<T = unknown>(
   }
 
   const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
+  ownAiHeaders(resolveUrl(input), method, init.body).forEach((value, name) => headers.set(name, value));
 
   if (
     typeof init.body === "string" &&

@@ -16,7 +16,8 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import store
-from .ai import ai_available
+from .ai import OpenAIProvider, ai_available
+from .ai_connection import connection_from_headers
 from .analysis import analyze, refresh_policy_findings, utcnow
 from .auth import PROXY_PATH, AuthVerifier, clerk_proxy
 from .models import (
@@ -301,7 +302,9 @@ async def list_runs(request: Request):
 
 @app.post("/api/v1/analyses", status_code=201, operation_id="createAnalysis")
 async def create_run(data: AnalysisInput, request: Request):
-    result = await asyncio.wait_for(analyze(sample_files(), "Checkout reliability sample", "sample", data.use_ai), 90)
+    connection = connection_from_headers(request.headers, data.use_ai)
+    provider = OpenAIProvider(connection) if connection else None
+    result = await asyncio.wait_for(analyze(sample_files(), "Checkout reliability sample", "sample", data.use_ai, provider), 90)
     try:
         await request.app.state.storage.run(store.save_analysis, request.state.owner, result.model_dump(), mutation=True)
     except ValueError as exc:
@@ -324,8 +327,10 @@ async def upload(request: Request, file: UploadFile = File(...), use_ai: bool = 
 
 async def analyze_submission(request, files, name, source_type, use_ai, project_path=".", repository=None):
     files = select_project(validate_sources(files), project_path)
+    connection = connection_from_headers(request.headers, use_ai)
+    provider = OpenAIProvider(connection) if connection else None
     try:
-        result = await asyncio.wait_for(analyze(files, name, source_type, use_ai), 90)
+        result = await asyncio.wait_for(analyze(files, name, source_type, use_ai, provider), 90)
     except TimeoutError:
         raise InputError("Analysis exceeded its time budget. Select a smaller project folder or upload relevant source files") from None
     result.repository = repository

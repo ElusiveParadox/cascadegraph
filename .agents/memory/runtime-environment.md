@@ -23,3 +23,14 @@ optimizer cache. Installed-version checks alone did not diagnose the browser.
 **How to apply:** When a runtime version mismatch contradicts package resolution,
 check the served optimized dependency, not just the package manifest. Treat
 optimizer output as disposable; never work around a mismatch by ignoring peers.
+
+A failed managed API workflow can coexist with an older listening process
+after workflow reconciliation. A successful health check alone does not prove
+that the latest server code is running.
+
+**Why:** Automatic reconciliation reported an address-in-use startup failure
+while an earlier API process still served the port.
+
+**How to apply:** Verify listener ownership as well as workflow state before
+attributing a startup problem to application code. Do not change the port or
+create a duplicate workflow to hide the conflict.

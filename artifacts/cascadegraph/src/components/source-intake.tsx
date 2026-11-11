@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "wouter";
+import { useOwnAi } from "@/lib/use-own-ai";
 import { FilePlus2, Github, Loader2, X } from "lucide-react";
 import { useAnalyzeRepository, useAnalyzeSources, type Analysis, type SystemStatus } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +35,8 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
   const [pendingBatch, setPendingBatch] = useState<{ files: SourceFile[]; conflicts: string[]; discovery: Discovery | null } | null>(null);
   const discoveryLock = useRef(false);
   const repository = useAnalyzeRepository({ mutation: { onSuccess: onAnalyzed } });
+  const ownAi = useOwnAi();
+  const canUseAi = !!ownAi || !!limits?.ai_available;
   const sources = useAnalyzeSources({ mutation: { onSuccess: onAnalyzed } });
   const busy = repository.isPending || sources.isPending;
   useEffect(() => onBusyChange(busy), [busy, onBusyChange]);
@@ -96,10 +100,10 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
         repository.reset(); sources.reset();
         if (files.length) {
           sources.mutate({ data: { files: files.map(f => f.file), paths: files.map(f => f.path.trim()),
-            repository_url: url.trim(), ref: ref.trim(), project_path: project.trim() || ".", use_ai: ai && !!limits.ai_available } });
+            repository_url: url.trim(), ref: ref.trim(), project_path: project.trim() || ".", use_ai: ai && canUseAi } });
         } else {
           repository.mutate({ data: { repository_url: url.trim(), ref: ref.trim(),
-            project_path: project.trim() || ".", use_ai: ai && !!limits.ai_available } });
+            project_path: project.trim() || ".", use_ai: ai && canUseAi } });
         }
       }}>
         <p className="text-sm text-muted-foreground">Paste a public repository link to start. CascadeGraph downloads a bounded, commit-pinned snapshot and inspects supported source without running it. If files are missing, the analysis asks for them.</p>
@@ -154,9 +158,10 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
           </div>}
         </FileDropZone>
         <label className="flex items-start gap-2 text-xs">
-          <input type="checkbox" checked={ai} disabled={!limits?.ai_available} onChange={e => setAi(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" data-testid="checkbox-repository-ai" />
-          <span>Use AI-assisted extraction <span className="num text-[10px] text-primary">OPT-IN, BILLED</span><span className="mt-1 block text-muted-foreground">Optional redacted source excerpts are sent to an external model and billed to credits. Leave unchecked to keep parsing local.</span></span>
+          <input type="checkbox" checked={ai} disabled={!canUseAi} onChange={e => setAi(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" data-testid="checkbox-repository-ai" />
+          <span>Use AI-assisted extraction <span className="num text-[10px] text-primary">OPT-IN, BILLED</span><span className="mt-1 block text-muted-foreground">Optional redacted source excerpts are sent to an external model and {ownAi ? "billed by your selected provider using your API key" : "billed to Replit credits"}. Leave unchecked to avoid AI requests.</span></span>
         </label>
+        <Link href="/settings/ai" className="inline-flex text-xs text-primary underline underline-offset-2">AI settings · use your own API key</Link>
         {limits && <p className="num text-[10.5px] text-muted-foreground">ZIP/download ≤ {limits.max_archive_mb} MiB · expanded ≤ {limits.max_expanded_mb} MiB · supported source ≤ {limits.max_source_mb} MiB · each source ≤ {limits.max_file_kb} KiB</p>}
         {(submitted || files.length > 0) && errors.length > 0 && <ul role="alert" className="space-y-1 text-xs text-destructive">{errors.map(error => <li key={error}>{error}</li>)}</ul>}
         {repository.isError && <ErrorPanel error={repository.error} title="Repository could not be analyzed" />}

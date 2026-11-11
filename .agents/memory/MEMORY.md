@@ -3,4 +3,5 @@
 - [Runtime environment quirks](runtime-environment.md) — distinguish publication flags from platform context; stale Vite prebundles can contradict installed React versions.
 - [Folder upload test fixtures](folder-upload-tests.md) — disk-backed uploads need intact original files and browser-side FormData inspection.
 - [Authentication entry points](auth-entrypoints.md) — keep GitHub visibly available; configuration instructions alone do not satisfy the requested sign-in UI.
+- [End-user AI credentials](own-api-keys.md) — user keys must not become shared server credentials; preserve request isolation, explicit opt-in and billing boundaries.
 - [Safe recovery verification](auth-recovery-testing.md) — distinguish real resets from fixtures; automatic browser snapshots can disclose masked password input values.

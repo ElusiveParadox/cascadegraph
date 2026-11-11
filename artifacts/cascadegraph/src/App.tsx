@@ -10,6 +10,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Shell } from '@/components/shell';
 import NotFound from '@/pages/not-found';
 import Overview from '@/pages/overview';
+import AiSettingsPage from '@/pages/ai-settings';
+import { setOwnAiConnection } from '@workspace/api-client-react';
 import AnalysisPage from '@/pages/analysis';
 import PoliciesPage from '@/pages/policies';
 import SimulationPage from '@/pages/simulation';
@@ -130,6 +132,7 @@ function WorkspaceRoutes() {
             <Route path="/comparison/:id" component={ComparisonPage} />
             <Route path="/reports/:id" component={ReportPage} />
             <Route path="/validation" component={ValidationPage} />
+            <Route path="/settings/ai" component={AiSettingsPage} />
             <Route path="/help" component={HelpPage} />
             <Route component={NotFound} />
           </Switch>
@@ -167,6 +170,7 @@ function IdentityTransitionGuard() {
       if (user === undefined) return; // not resolved yet
       const userId = user?.id ?? null;
       if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
+        setOwnAiConnection(null);
         writeSelection({ analysisId: undefined, simulationId: undefined });
       }
       prevUserIdRef.current = userId;
@@ -188,6 +192,7 @@ function ClerkAuthBridge({ children }: { children: ReactNode }) {
     displayName: user?.fullName || user?.username || null,
     email: user?.primaryEmailAddress?.emailAddress ?? null,
     signOut: async () => {
+      setOwnAiConnection(null);
       await clearBrowserCookie();
       await signOutRef.current({ redirectUrl: basePath || '/' });
     },

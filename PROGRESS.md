@@ -1,5 +1,44 @@
 # Progress
 
+## Own API key option and usable workbench flows — 2026-11-11
+- Moved GitHub into Google's social-login section above email on sign-in
+  and sign-up. It mounts only with the real provider section, never alone
+  during SDK loading. Desktop/mobile/keyboard checks passed. The managed
+  service still rejects GitHub as disabled; this remains an honest visible
+  error, not a claimed successful login.
+- Restored the managed API workflow after an older listener occupied its
+  port. Full regression checks now pass: 144 backend tests, 30 frontend
+  helper tests, shared/frontend type checking, Ruff and production build.
+- Browser checks exercised real sample/source/ZIP analysis, evidence/edge
+  review, policy correction, baseline/candidate simulation, JSON export
+  and refreshed history. Validation/help retained their measured/static
+  scope disclosures. A final deletion was interrupted by live code reloads;
+  its isolated stable-server recheck is tracked separately.
+- Added AI settings with OpenAI/OpenRouter selection, editable model ID
+  and an own-key password field. It selects the key only for this tab and
+  clears the draft immediately; refresh, identity change, sign-out or Remove
+  key discards it. No browser/database credential persistence was added.
+- Wired personal credentials into all four AI-enabled ingestion paths,
+  with strict opt-in, fixed provider origins, concurrent request isolation,
+  sanitized credential/model/quota/connection errors, no redirect following,
+  no automatic own-key retries and no managed-billing fallback.
+- Credential regressions used fake canaries and mocked provider transport;
+  no real user key was requested or billed. Live provider acceptance is
+  intentionally checked only when a user runs an opted-in analysis.
+- Managed Replit AI provisioning did not finish because it requires phone
+  verification. The own-key path does not depend on that provisioning.
+- Stable-server browser follow-up verified the settings form, provider/model
+  selection, cleared input/status-only metadata, opt-in availability, mobile
+  fit, Remove key and refresh clearing. Cancel/confirm deletion now passed
+  through the UI, with 204 responses and empty reloaded test history.
+- The browser's opted-in transport abort did not prevent server processing:
+  an explicitly fake canary reached OpenRouter and was rejected with 401.
+  No real key or successful/billable generation was used. This is not claimed
+  as mocked-only browser transport or successful live AI extraction. Backend
+  credential isolation/non-disclosure tests used fully mocked transports.
+- Required model validation now disables an empty-model submission. Invalid
+  replacement credentials/models cannot overwrite an existing valid connection.
+
 ## Authentication outage regressions — 2026-11-11
 - Added isolated mocked transport regressions for stalled JWKS headers, trickling
   bodies, concurrent failure cooldown, bounded lock admission, cancellation and

@@ -9,6 +9,16 @@ production auth proxy forwards credential bytes only in memory and never logs
 bodies, cookies or credential headers. Do not add a parallel password store.
 See docs/AUTHENTICATION.md for the provider source and verification boundaries.
 
+## User-owned AI credentials
+
+The own-key option is tab-memory-only and request-local. It never replaces a
+shared server secret or stores credentials in browser storage, cookies,
+PostgreSQL or reports. Keys are cleared on refresh, identity changes and
+sign-out, and are attached only to explicitly opted-in analysis creation.
+Provider origins are fixed to OpenAI/OpenRouter; own-key calls neither follow
+redirects nor retry automatically. Upstream failures become fixed safe messages
+and never fall back to managed billing. See docs/OWN_API_KEYS.md.
+
 ## Reviewed proxy scan warning
 
 Static analysis flags the Clerk proxy's request-derived path/query as potential

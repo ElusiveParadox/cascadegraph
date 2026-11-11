@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { BookOpen, FileText, FlaskConical, GitCompare, Home, Network, ShieldCheck, SlidersHorizontal, Menu, X, LogIn, LogOut } from "lucide-react";
+import { BookOpen, FileText, FlaskConical, GitCompare, Home, Network, ShieldCheck, SlidersHorizontal, Menu, X, LogIn, LogOut, KeyRound } from "lucide-react";
 import { useAuthState } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 import { errorMessage, readSelection, type Selection } from "@/lib/workspace";
@@ -124,6 +124,7 @@ export function Shell({ children }: { children: ReactNode }) {
     { href: s ? `/comparison/${s}` : null, label: "Comparison", icon: GitCompare, match: "/comparison", hint: "run a simulation" },
     { href: a ? `/reports/${a}` : null, label: "Report", icon: FileText, match: "/reports", hint: "select an analysis" },
     { href: "/validation", label: "Validation", icon: ShieldCheck, match: "/validation" },
+    { href: "/settings/ai", label: "AI settings", icon: KeyRound, match: "/settings/ai" },
     { href: "/help", label: "Scope & limits", icon: BookOpen, match: "/help" },
   ];
   const nav = (

@@ -3,9 +3,11 @@
 import ast
 import os
 
-from openai import AsyncOpenAI
+import httpx
+from openai import APIConnectionError, APIStatusError, AsyncOpenAI
 from pydantic import Field
 
+from .ai_connection import OwnAIConnection, ProviderRequestError
 from .models import Backoff, Policy, StrictModel
 from .parsers import ev_node
 from .security import InputError, digest, redact
@@ -26,21 +28,37 @@ def ai_available() -> bool:
 
 
 class OpenAIProvider:
+    def __init__(self, connection: OwnAIConnection | None = None):
+        self.connection = connection
+
+    async def _completion(self, client, **params):
+        try:
+            return await client.chat.completions.create(**params)
+        except APIStatusError as exc:
+            code = {401: "credentials", 403: "credentials", 404: "model", 429: "quota",
+                    400: "format", 422: "format"}.get(exc.status_code, "unavailable")
+            raise ProviderRequestError(code) from None
+        except APIConnectionError:
+            raise ProviderRequestError("unavailable") from None
+
     async def extract(self, numbered: str) -> LoopProposal:
-        if not ai_available():
+        if not self.connection and not ai_available():
             raise InputError("AI provider is not configured")
         provider = os.getenv("LLM_PROVIDER", "replit_openai")
-        if provider not in {"openai", "replit_openai", "openai_compatible"}:
+        if not self.connection and provider not in {"openai", "replit_openai", "openai_compatible"}:
             raise InputError("Unsupported LLM_PROVIDER")
         client = AsyncOpenAI(
-            api_key=os.getenv("LLM_API_KEY") or os.environ["AI_INTEGRATIONS_OPENAI_API_KEY"],
-            base_url=os.getenv("LLM_BASE_URL") or os.getenv("AI_INTEGRATIONS_OPENAI_BASE_URL"),
+            api_key=self.connection.api_key.get_secret_value() if self.connection else
+                os.getenv("LLM_API_KEY") or os.environ["AI_INTEGRATIONS_OPENAI_API_KEY"],
+            base_url=self.connection.base_url if self.connection else
+                os.getenv("LLM_BASE_URL") or os.getenv("AI_INTEGRATIONS_OPENAI_BASE_URL"),
             timeout=float(os.getenv("LLM_TIMEOUT_SECONDS", "30")),
-            max_retries=int(os.getenv("LLM_MAX_RETRIES", "1")),
+            max_retries=0 if self.connection else int(os.getenv("LLM_MAX_RETRIES", "1")),
+            http_client=httpx.AsyncClient(follow_redirects=False) if self.connection else None,
         )
         async with client:
-            response = await client.chat.completions.create(
-                model=os.getenv("LLM_MODEL", "gpt-5.4-mini"),
+            response = await self._completion(client,
+                model=self.connection.model if self.connection else os.getenv("LLM_MODEL", "gpt-5.4-mini"),
                 max_completion_tokens=8192,
                 response_format={"type": "json_schema", "json_schema": {
                     "name": "retry_loop", "strict": True, "schema": LoopProposal.model_json_schema()
@@ -132,6 +150,8 @@ async def extract_custom_loop(path: str, text: str, enabled: bool, provider=None
         p.backoff = Backoff(kind="exponential", delay_ms=proposal.base_delay_ms)
         p.confidence = "source_checked"
         p.resolution_status = "resolved"
+    except ProviderRequestError as exc:
+        p.unresolved = [str(exc)]
     except Exception:
         # Provider responses, raw source and tokens are deliberately absent.
         p.unresolved = ["AI extraction failed or source-evidence validation rejected its output"]
