@@ -1,5 +1,31 @@
 # Progress
 
+## Password recovery verification — 2026-11-11
+- Verified the existing Clerk widget with an isolated reserved development test
+  identity: recovery/back navigation, real invalid-code rejection, real password
+  change, authenticated history GET and signed-in identity after reload.
+- Expired-code presentation used a single targeted provider-response fixture,
+  not a real expired challenge. Refreshing the recovery subroute returns to the
+  password step; recovery can be restarted.
+- Added five authentication regressions for transient proxy credential handling
+  (success/invalid/expired/transport), unchanged isolated database contents and
+  original-account history access with a replacement signed session. Strengthened
+  the existing rejected-password-field test with INFO logs and a database dump.
+- Targeted SDK-only browser evidence found one password-bearing request during
+  Clerk reset, no password-bearing application API requests, and no canary in
+  response/error/console/browser storage. Request destination was not independently
+  classified; report does not claim stronger evidence.
+- The first disposable test password appeared in an automatic browser accessibility
+  snapshot, not app logs; a subsequent SDK-only reset replaced it. The test
+  identity remains signed out in development because self-delete required
+  additional verification. No user credentials or real recipients were used.
+- Passed `uv run --frozen pytest` (125), `uv run --frozen ruff check src tests`,
+  `pnpm run typecheck` and frontend unit checks. Managed services started cleanly;
+  sign-in screenshot rendered. See `docs/PASSWORD_RECOVERY_VERIFICATION.md`.
+- No second password store, application authentication changes, provider setting
+  changes or production publication. Production configuration, actual expiration
+  and real email delivery remain separate unverified gates.
+
 ## Explicit GitHub entry point and password review — 2026-11-11
 - Added a visible Continue with GitHub control on both sign-in and sign-up,
   wired to real Clerk SDK SSO with loading, retry/error feedback and an

@@ -2,6 +2,9 @@
 
 import asyncio
 import hashlib
+import json
+import logging
+import sqlite3
 import time
 
 import httpx
@@ -188,6 +191,7 @@ def test_account_resolver_rejects_arbitrary_owner(local_auth):
 
 
 def test_application_api_rejects_and_never_echoes_passwords(local_auth, caplog):
+    caplog.set_level(logging.INFO)
     canary = "test-only-password-canary-not-a-real-credential"
     for field in ("password", "password_hash", "passwordDigest"):
         result = local_auth.post("/api/v1/analyses", json={
@@ -197,3 +201,77 @@ def test_application_api_rejects_and_never_echoes_passwords(local_auth, caplog):
         assert canary not in result.text
     assert canary not in caplog.text
     assert local_auth.get("/api/v1/analyses").json() == []
+    assert canary not in database_dump()
+
+
+def database_dump():
+    """Inspect every local-test table, not just the current owner's history."""
+    with sqlite3.connect(store.database_path()) as db:
+        return "\n".join(db.iterdump())
+
+
+@pytest.mark.parametrize("outcome", ["complete", "invalid", "expired", "transport"])
+def test_recovery_proxy_keeps_credentials_transient(monkeypatch, local_auth, caplog, outcome):
+    """Exercise production proxy wiring locally; never contact a real provider."""
+    caplog.set_level(logging.INFO)
+    monkeypatch.setenv("REPLIT_DEPLOYMENT", "1")
+    # Populate an isolated test store before proving the proxy leaves it untouched.
+    assert local_auth.get("/api/v1/analyses").status_code == 200
+    before = database_dump()
+    canary = "test-only-reset-password-canary-not-a-real-credential"
+    body = ("code=424242&password=" + canary).encode()
+    real_client = httpx.AsyncClient
+    seen = []
+
+    def handler(req):
+        seen.append(req)
+        assert req.method == "POST"
+        assert req.url.host == "frontend-api.clerk.dev"
+        assert req.content == body
+        if outcome == "transport":
+            # Even an exception containing sensitive bytes must not be logged.
+            raise httpx.ReadError(canary, request=req)
+        if outcome == "complete":
+            status, payload = 200, {"response": {"status": "complete"}}
+        else:
+            code = "form_code_incorrect" if outcome == "invalid" else "verification_expired"
+            status, payload = 422, {"errors": [{"code": code, "message": "Request a new code"}]}
+        # The proxy consumes wire bytes; json= pre-consumes a mock response.
+        return httpx.Response(status, stream=httpx.ByteStream(json.dumps(payload).encode()),
+                              headers={"content-type": "application/json"})
+
+    monkeypatch.setattr(auth.httpx, "AsyncClient",
+                        lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
+    response = local_auth.post(
+        "/api/__clerk/v1/client/sign_ins/test-only/reset_password",
+        content=body, headers={"content-type": "application/x-www-form-urlencoded"},
+    )
+    assert len(seen) == 1  # Password-changing requests are never replayed.
+    assert response.status_code == (502 if outcome == "transport" else 200 if outcome == "complete" else 422)
+    assert response.headers["cache-control"] == "no-store"
+    assert canary not in response.text
+    assert canary not in str(response.headers)
+    assert canary not in caplog.text
+    assert before == database_dump()
+
+
+def test_new_session_after_recovery_retains_only_original_account(local_auth, signing_key):
+    """Signed local fixtures verify ownership, not Clerk's password reset itself."""
+    key = signing_key[0]
+    local_auth.cookies.set("__session", session_token(key, sid="sess_before_recovery"))
+    created = local_auth.post("/api/v1/analyses", json={"source_type": "sample", "use_ai": False})
+    assert created.status_code == 201
+    aid = created.json()["id"]
+    local_auth.cookies.clear()
+    local_auth.cookies.set("__session", session_token(key, sid="sess_after_recovery"))
+    assert local_auth.get(f"/api/v1/analyses/{aid}").status_code == 200
+    assert any(row["id"] == aid for row in local_auth.get("/api/v1/analyses").json())
+    local_auth.cookies.set("__session", session_token(key, sub="user_OtherRecovery", sid="sess_other"))
+    assert local_auth.get(f"/api/v1/analyses/{aid}").status_code == 404
+    local_auth.cookies.set("__session", session_token(key, sid="sess_after_recovery",
+                                                    exp=int(time.time()) - 60))
+    expired = local_auth.get(f"/api/v1/analyses/{aid}")
+    assert expired.status_code == 401
+    assert not expired.headers.get("set-cookie")
+    local_auth.cookies.clear()
+    assert local_auth.get(f"/api/v1/analyses/{aid}").status_code == 404

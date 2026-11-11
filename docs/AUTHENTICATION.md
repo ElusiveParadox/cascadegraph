@@ -83,3 +83,7 @@ A regression sends a non-secret password canary in unsupported application API
 fields and verifies a 422 response, no value echo, no log disclosure and no
 saved analysis. OAuth errors are classified by stable codes only, never raw
 provider error payloads.
+
+See [password recovery verification](PASSWORD_RECOVERY_VERIFICATION.md) for the
+real development reset/session check, explicit fixture boundaries, credential
+regressions, and unverified production/email-delivery gates.
