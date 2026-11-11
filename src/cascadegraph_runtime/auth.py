@@ -16,6 +16,11 @@ from starlette.responses import Response
 
 PROXY_PATH = "/api/__clerk"
 FAPI = "https://frontend-api.clerk.dev"
+JWKS_DEADLINE = 3
+AUTH_ADMISSION_TIMEOUT = 1
+JWKS_FAILURE_COOLDOWN = 2
+PROXY_DEADLINE = 30
+PROXY_RESPONSE_LIMIT = 20 * 1024 * 1024
 HOP_HEADERS = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
                "te", "trailer", "transfer-encoding", "upgrade", "host", "content-length"}
 
@@ -47,18 +52,26 @@ class AuthVerifier:
         if now < self.failed_until:
             raise HTTPException(503, "Sign-in verification is temporarily unavailable")
         try:
-            await asyncio.wait_for(self.lock.acquire(), timeout=1)
+            await asyncio.wait_for(self.lock.acquire(), timeout=AUTH_ADMISSION_TIMEOUT)
         except TimeoutError:
             raise HTTPException(503, "Sign-in verification is busy; retry shortly") from None
         try:
             now = time.monotonic()
+            # Callers queued before a failed fetch must observe its cooldown too.
+            if kid in self.keys and now - self.fetched_at < 300:
+                return self.keys[kid]
+            if now < self.failed_until:
+                raise HTTPException(503, "Sign-in verification is temporarily unavailable")
             # Unknown key IDs cannot force unbounded remote fetches.
             if now - self.fetched_at >= 30:
                 try:
-                    response = await self.client.get(
-                        "https://api.clerk.com/v1/jwks",
-                        headers={"Authorization": f"Bearer {os.environ['CLERK_SECRET_KEY']}"},
-                    )
+                    # HTTPX timeouts bound individual I/O waits, not a response
+                    # that keeps trickling bytes indefinitely.
+                    async with asyncio.timeout(JWKS_DEADLINE):
+                        response = await self.client.get(
+                            "https://api.clerk.com/v1/jwks",
+                            headers={"Authorization": f"Bearer {os.environ['CLERK_SECRET_KEY']}"},
+                        )
                     response.raise_for_status()
                     keys = {}
                     for item in response.json()["keys"]:
@@ -71,8 +84,8 @@ class AuthVerifier:
                     if not keys:
                         raise ValueError("No verification keys")
                     self.keys, self.fetched_at = keys, now
-                except (httpx.HTTPError, jwt.PyJWTError, ValueError, KeyError, TypeError):
-                    self.failed_until = time.monotonic() + 2
+                except (TimeoutError, httpx.HTTPError, jwt.PyJWTError, ValueError, KeyError, TypeError):
+                    self.failed_until = time.monotonic() + JWKS_FAILURE_COOLDOWN
                     raise HTTPException(503, "Sign-in verification is temporarily unavailable") from None
             if kid not in self.keys:
                 raise HTTPException(401, "Sign in again to continue")
@@ -114,9 +127,9 @@ async def clerk_proxy(request: Request):
     if os.getenv("REPLIT_DEPLOYMENT") != "1" or not os.getenv("CLERK_SECRET_KEY"):
         return Response(status_code=404)
     try:
-        async with asyncio.timeout(30):
+        async with asyncio.timeout(PROXY_DEADLINE):
             try:
-                await asyncio.wait_for(request.app.state.auth.proxy_slots.acquire(), timeout=1)
+                await asyncio.wait_for(request.app.state.auth.proxy_slots.acquire(), timeout=AUTH_ADMISSION_TIMEOUT)
             except TimeoutError:
                 return Response(status_code=503)
             try:
@@ -156,7 +169,7 @@ async def _proxy_bytes(request):
                 payload = bytearray()
                 async for chunk in remote.aiter_raw():
                     payload.extend(chunk)
-                    if len(payload) > 20 * 1024 * 1024:
+                    if len(payload) > PROXY_RESPONSE_LIMIT:
                         return Response(status_code=502)
                 response = Response(bytes(payload), status_code=remote.status_code)
                 response.raw_headers = [

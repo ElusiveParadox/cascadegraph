@@ -1,5 +1,24 @@
 # Progress
 
+## Authentication outage regressions — 2026-11-11
+- Added isolated mocked transport regressions for stalled JWKS headers, trickling
+  bodies, concurrent failure cooldown, bounded lock admission, cancellation and
+  cached-key continuity. Added a three-second total JWKS deadline and rechecked
+  cooldown after lock admission to close the exposed gaps.
+- Exercised all eight managed proxy slots, bounded overload with concurrent
+  liveness, oversized/trickling response streams, transport errors and
+  cancellation during admission, upload and response reads. Verified stream
+  closure, exact slot recovery and no credential-bearing POST replay.
+- Temporary SQLite integration verifies unchanged history and browser cookies on
+  failed verification, account continuity after recovery, other-owner rejection
+  and cookie-only authentication. No real provider outages or shared data changes.
+- Passed `uv run --frozen pytest -q` (**139 passed**),
+  `uv run --frozen ruff check src tests`, `pnpm run typecheck`,
+  `pnpm --filter @workspace/cascadegraph test` (**26 tests plus workspace checks**)
+  and `git diff --check`. No browser sign-in journey or publication was attempted.
+- Restarted the managed API service with clean startup; proxied liveness returned
+  `{"status":"ok"}` and rendered correctly in the preview screenshot.
+
 ## Password recovery verification — 2026-11-11
 - Verified the existing Clerk widget with an isolated reserved development test
   identity: recovery/back navigation, real invalid-code rejection, real password

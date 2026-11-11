@@ -6,6 +6,8 @@ import json
 import logging
 import sqlite3
 import time
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
 
 import httpx
 import jwt
@@ -275,3 +277,444 @@ def test_new_session_after_recovery_retains_only_original_account(local_auth, si
     assert not expired.headers.get("set-cookie")
     local_auth.cookies.clear()
     assert local_auth.get(f"/api/v1/analyses/{aid}").status_code == 404
+
+
+class ControlledStream(httpx.AsyncByteStream):
+    """Raw provider bytes with observable entry/cleanup and no real network."""
+
+    def __init__(self, chunks=(), *, stalled=False, trickle=False):
+        self.chunks = chunks
+        self.stalled = stalled
+        self.trickle = trickle
+        self.entered = asyncio.Event()
+        self.closed = False
+        self.reads = 0
+
+    async def __aiter__(self):
+        self.entered.set()
+        for chunk in self.chunks:
+            self.reads += 1
+            yield chunk
+        if self.stalled:
+            await asyncio.Event().wait()
+        while self.trickle:
+            await asyncio.sleep(0.005)
+            self.reads += 1
+            yield b" "
+
+    async def aclose(self):
+        self.closed = True
+
+
+@asynccontextmanager
+async def mocked_verifier(monkeypatch, handler):
+    monkeypatch.setenv("CLERK_SECRET_KEY", "unit-test-placeholder")
+    verifier = auth.AuthVerifier()
+    await verifier.client.aclose()
+    verifier.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        yield verifier
+    finally:
+        await verifier.close()
+    assert verifier.client.is_closed
+
+
+def jwks_response(signing_key):
+    jwk = jwt.algorithms.RSAAlgorithm.to_jwk(signing_key[0].public_key(), as_dict=True)
+    jwk["kid"] = "unit-test-key"
+    return httpx.Response(200, json={"keys": [jwk]})
+
+
+@pytest.mark.parametrize("stage", ["headers", "body"])
+def test_jwks_stalls_have_total_deadline_and_release_lock(monkeypatch, signing_key, stage):
+    monkeypatch.setattr(auth, "JWKS_DEADLINE", 0.05)
+    monkeypatch.setattr(auth, "JWKS_FAILURE_COOLDOWN", 60)
+
+    async def scenario():
+        stream = ControlledStream(trickle=True)
+        calls = 0
+        recovered = False
+
+        async def handler(req):
+            nonlocal calls
+            calls += 1
+            if recovered:
+                return jwks_response(signing_key)
+            if stage == "headers":
+                await asyncio.Event().wait()
+            return httpx.Response(200, stream=stream)
+
+        async with mocked_verifier(monkeypatch, handler) as verifier:
+            start = time.monotonic()
+            with pytest.raises(HTTPException) as error:
+                await asyncio.wait_for(verifier.owner(request(session_token(signing_key[0]))), 0.8)
+            assert time.monotonic() - start < 0.8
+            assert error.value.status_code == 503
+            assert error.value.detail == "Sign-in verification is temporarily unavailable"
+            assert not verifier.lock.locked()
+            assert verifier.keys == {}
+            if stage == "body":
+                assert stream.reads > 1  # Active trickle must not reset the whole-operation budget.
+                assert stream.closed
+            with pytest.raises(HTTPException) as cooled:
+                await verifier._public_key("unit-test-key")
+            assert cooled.value.status_code == 503
+            assert calls == 1
+            verifier.failed_until = 0  # Advance only this verifier, never the process clock.
+            recovered = True
+            assert await verifier.owner(request(session_token(signing_key[0]))) == (
+                "acct:" + hashlib.sha256(b"user_AuthTestA").hexdigest()[:58]
+            )
+    asyncio.run(scenario())
+
+
+def test_jwks_failure_cooldown_covers_already_queued_callers(monkeypatch, signing_key, caplog):
+    monkeypatch.setattr(auth, "JWKS_FAILURE_COOLDOWN", 60)
+    caplog.set_level(logging.INFO)
+    canary = "test-only-upstream-secret-canary"
+
+    async def scenario():
+        entered, fail = asyncio.Event(), asyncio.Event()
+        calls = 0
+
+        async def handler(req):
+            nonlocal calls
+            calls += 1
+            entered.set()
+            await fail.wait()
+            raise httpx.ReadError(canary, request=req)
+
+        async with mocked_verifier(monkeypatch, handler) as verifier:
+            token = session_token(signing_key[0])
+            first = asyncio.create_task(verifier.owner(request(token)))
+            await asyncio.wait_for(entered.wait(), 0.8)
+            queued = [asyncio.create_task(verifier.owner(request(token))) for _ in range(7)]
+            await asyncio.sleep(0)  # All seven enter lock acquisition before failure.
+            fail.set()
+            results = await asyncio.wait_for(asyncio.gather(first, *queued, return_exceptions=True), 0.8)
+            assert all(isinstance(result, HTTPException) and result.status_code == 503 for result in results)
+            assert all(result.detail == "Sign-in verification is temporarily unavailable" for result in results)
+            assert calls == 1
+            assert not verifier.lock.locked()
+            assert canary not in caplog.text
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("stage", ["fetch", "admission"])
+def test_jwks_cancellation_propagates_without_poisoning_lock(monkeypatch, signing_key, stage):
+    async def scenario():
+        stream = ControlledStream(stalled=True)
+        calls = 0
+        recovered = False
+
+        def handler(req):
+            nonlocal calls
+            calls += 1
+            if recovered:
+                return jwks_response(signing_key)
+            return httpx.Response(200, stream=stream)
+
+        async with mocked_verifier(monkeypatch, handler) as verifier:
+            if stage == "admission":
+                await verifier.lock.acquire()
+            task = asyncio.create_task(verifier._public_key("unit-test-key"))
+            try:
+                if stage == "fetch":
+                    await asyncio.wait_for(stream.entered.wait(), 0.8)
+                else:
+                    await asyncio.sleep(0)
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+                assert verifier.failed_until == 0
+                if stage == "admission":
+                    assert verifier.lock.locked()  # The cancelled waiter did not release someone else's lock.
+                    assert calls == 0
+                else:
+                    assert stream.closed
+                    assert not verifier.lock.locked()
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                if verifier.lock.locked():
+                    verifier.lock.release()
+            recovered = True
+            assert await verifier._public_key("unit-test-key") == signing_key[1]
+    asyncio.run(scenario())
+
+
+def test_jwks_admission_is_bounded_and_cached_owner_survives_failure(monkeypatch, signing_key):
+    monkeypatch.setattr(auth, "AUTH_ADMISSION_TIMEOUT", 0.03)
+
+    async def scenario():
+        def forbidden(req):
+            pytest.fail("Cached identity and lock saturation must not contact the provider")
+
+        async with mocked_verifier(monkeypatch, forbidden) as verifier:
+            await verifier.lock.acquire()
+            try:
+                with pytest.raises(HTTPException) as error:
+                    await asyncio.wait_for(verifier._public_key("unknown"), 0.8)
+                assert error.value.status_code == 503
+                assert error.value.detail == "Sign-in verification is busy; retry shortly"
+                assert verifier.lock.locked()
+                verifier.keys = {"unit-test-key": signing_key[1]}
+                verifier.fetched_at = time.monotonic()
+                verifier.failed_until = time.monotonic() + 60
+                owner = await verifier.owner(request(session_token(signing_key[0])))
+                assert owner == "acct:" + hashlib.sha256(b"user_AuthTestA").hexdigest()[:58]
+                assert await verifier.owner(request(authorization="Bearer " + session_token(signing_key[0]))) is None
+            finally:
+                verifier.lock.release()
+    asyncio.run(scenario())
+
+
+def proxy_request(verifier, receive=None):
+    return Request({
+        "type": "http", "method": "POST", "path": "/api/__clerk/v1/client/sign_ins",
+        "query_string": b"", "scheme": "https", "server": ("app.example", 443),
+        "headers": [(b"host", b"app.example")],
+        "app": SimpleNamespace(state=SimpleNamespace(auth=verifier)),
+    }, receive=receive or empty_body)
+
+
+async def empty_body():
+    return {"type": "http.request", "body": b"", "more_body": False}
+
+
+async def assert_slots_available(verifier, count=8):
+    # Public semaphore operations prove neither leaks nor over-release.
+    for _ in range(count):
+        await asyncio.wait_for(verifier.proxy_slots.acquire(), 0.8)
+    assert verifier.proxy_slots.locked()
+    for _ in range(count):
+        verifier.proxy_slots.release()
+
+
+@pytest.mark.parametrize("failure", ["oversized", "trickle", "transport"])
+def test_proxy_stream_failures_are_bounded_closed_and_recover(monkeypatch, failure, caplog):
+    monkeypatch.setenv("REPLIT_DEPLOYMENT", "1")
+    monkeypatch.setenv("CLERK_SECRET_KEY", "unit-test-placeholder")
+    monkeypatch.setattr(auth, "PROXY_DEADLINE", 0.06)
+    monkeypatch.setattr(auth, "PROXY_RESPONSE_LIMIT", 32)
+    caplog.set_level(logging.INFO)
+
+    async def scenario():
+        verifier = auth.AuthVerifier()
+        real_client = httpx.AsyncClient
+        stream = ControlledStream([b"a" * 16, b"b" * 17, b"must-not-read"], trickle=failure == "trickle")
+        if failure != "oversized":
+            stream.chunks = ()
+        calls = []
+
+        def handler(req):
+            calls.append(req)
+            if failure == "transport" and len(calls) == 1:
+                raise httpx.ReadError("test-only-sensitive-upstream-detail", request=req)
+            return httpx.Response(200, stream=stream if len(calls) == 1 else httpx.ByteStream(b"ok"))
+
+        monkeypatch.setattr(auth.httpx, "AsyncClient",
+                            lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
+        try:
+            result = await asyncio.wait_for(auth.clerk_proxy(proxy_request(verifier)), 0.8)
+            assert result.status_code == (504 if failure == "trickle" else 502)
+            assert result.body == b""
+            assert not result.headers.get("set-cookie")
+            assert len(calls) == 1  # No replay of credential-bearing POSTs.
+            if failure != "transport":
+                assert stream.closed
+                if failure == "oversized":
+                    assert stream.reads == 2
+                else:
+                    assert stream.reads > 1
+            assert "test-only-sensitive-upstream-detail" not in caplog.text
+            await assert_slots_available(verifier)
+            recovered = await auth.clerk_proxy(proxy_request(verifier))
+            assert recovered.status_code == 200
+            assert recovered.body == b"ok"
+            await assert_slots_available(verifier)
+        finally:
+            await verifier.close()
+    asyncio.run(scenario())
+
+
+def test_proxy_saturation_keeps_liveness_working_and_releases_cancelled_slot(monkeypatch):
+    monkeypatch.setenv("REPLIT_DEPLOYMENT", "1")
+    monkeypatch.setenv("CLERK_SECRET_KEY", "unit-test-placeholder")
+    monkeypatch.setattr(auth, "AUTH_ADMISSION_TIMEOUT", 0.03)
+
+    async def scenario():
+        verifier = auth.AuthVerifier()
+        monkeypatch.setattr(app.state, "auth", verifier, raising=False)
+        real_client = httpx.AsyncClient
+        streams = []
+
+        def handler(req):
+            stream = ControlledStream(stalled=True)
+            streams.append(stream)
+            return httpx.Response(200, stream=stream)
+
+        monkeypatch.setattr(auth.httpx, "AsyncClient",
+                            lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
+        tasks = []
+        try:
+            tasks = [asyncio.create_task(auth.clerk_proxy(proxy_request(verifier))) for _ in range(8)]
+            async with real_client(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+                for _ in range(100):
+                    if len(streams) == 8 and all(s.entered.is_set() for s in streams):
+                        break
+                    await asyncio.sleep(0.001)
+                assert len(streams) == 8
+                assert all(s.entered.is_set() for s in streams)
+                result = await asyncio.wait_for(client.get("/api/__clerk/v1/environment"), 0.8)
+                assert result.status_code == 503
+                assert result.content == b""
+                assert result.headers["cache-control"] == "no-store"
+                assert not result.headers.get("set-cookie")
+                assert len(streams) == 8
+                live = await asyncio.wait_for(client.get("/api/v1/health/live"), 0.8)
+                assert live.status_code == 200
+                assert live.json() == {"status": "ok"}
+                assert not live.headers.get("set-cookie")
+                tasks[0].cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await tasks[0]
+                assert streams[0].closed
+                # The recovered slot really admits another request, not just a counter inspection.
+                monkeypatch.setattr(auth.httpx, "AsyncClient", lambda **kwargs: real_client(
+                    transport=httpx.MockTransport(lambda req: httpx.Response(200, stream=httpx.ByteStream(b"ok"))),
+                    **kwargs,
+                ))
+                assert (await client.get("/api/__clerk/v1/environment")).content == b"ok"
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            assert all(s.closed for s in streams)
+            await assert_slots_available(verifier)
+            await verifier.close()
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("stage", ["admission", "upload", "response"])
+def test_proxy_cancellation_never_leaks_or_over_releases_admission(monkeypatch, stage):
+    monkeypatch.setenv("REPLIT_DEPLOYMENT", "1")
+    monkeypatch.setenv("CLERK_SECRET_KEY", "unit-test-placeholder")
+
+    async def scenario():
+        verifier = auth.AuthVerifier()
+        real_client = httpx.AsyncClient
+        stream = ControlledStream(stalled=True)
+        upload_entered = asyncio.Event()
+        calls = 0
+
+        def handler(req):
+            nonlocal calls
+            calls += 1
+            return httpx.Response(200, stream=stream)
+
+        async def slow_upload():
+            upload_entered.set()
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr(auth.httpx, "AsyncClient",
+                            lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
+        if stage == "admission":
+            for _ in range(8):
+                await verifier.proxy_slots.acquire()
+        task = asyncio.create_task(auth.clerk_proxy(proxy_request(
+            verifier, slow_upload if stage == "upload" else None,
+        )))
+        try:
+            if stage == "response":
+                await asyncio.wait_for(stream.entered.wait(), 0.8)
+            elif stage == "upload":
+                await asyncio.wait_for(upload_entered.wait(), 0.8)
+            else:
+                await asyncio.sleep(0)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            if stage == "admission":
+                assert verifier.proxy_slots.locked()
+            if stage == "response":
+                assert stream.closed
+            assert calls == (1 if stage == "response" else 0)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            if stage == "admission":
+                for _ in range(8):
+                    verifier.proxy_slots.release()
+            await assert_slots_available(verifier)
+            await verifier.close()
+    asyncio.run(scenario())
+
+
+def test_jwks_outage_never_reassigns_history_and_liveness_bypasses_it(monkeypatch, tmp_path, signing_key):
+    monkeypatch.setenv("CASCADEGRAPH_DB_PATH", str(tmp_path / "outage.sqlite3"))
+    monkeypatch.setenv("CLERK_SECRET_KEY", "unit-test-placeholder")
+    monkeypatch.setattr(auth, "JWKS_DEADLINE", 0.05)
+    monkeypatch.setattr(auth, "JWKS_FAILURE_COOLDOWN", 60)
+
+    async def scenario():
+        failing = False
+        entered = asyncio.Event()
+        calls = 0
+
+        async def handler(req):
+            nonlocal calls
+            calls += 1
+            if failing:
+                entered.set()
+                await asyncio.Event().wait()
+            return jwks_response(signing_key)
+
+        async with app.router.lifespan_context(app):
+            verifier = app.state.auth
+            await verifier.client.aclose()
+            verifier.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+                token = session_token(signing_key[0])
+                client.cookies.set("__session", token)
+                created = await client.post("/api/v1/analyses", json={"source_type": "sample", "use_ai": False})
+                assert created.status_code == 201
+                aid = created.json()["id"]
+                client.cookies.set("cg_session", "existing-browser-cookie", path="/api")
+                before_cookies = dict(client.cookies)
+                before = database_dump()
+                failing = True
+                verifier.fetched_at = float("-inf")
+                pending = asyncio.create_task(client.get(f"/api/v1/analyses/{aid}"))
+                try:
+                    await asyncio.wait_for(entered.wait(), 0.8)
+                    live = await asyncio.wait_for(client.get("/api/v1/health/live"), 0.8)
+                    assert live.status_code == 200
+                    assert not live.headers.get("set-cookie")
+                    failed = await asyncio.wait_for(pending, 0.8)
+                    for result in (failed, await client.get("/api/v1/analyses")):
+                        assert result.status_code == 503
+                        assert result.json() == {"error": "Sign-in verification is temporarily unavailable"}
+                        assert result.headers["cache-control"] == "no-store"
+                        assert not result.headers.get("set-cookie")
+                        assert token not in result.text
+                    assert calls == 2  # Initial success and one stalled refresh, never a retry storm.
+                    assert before == database_dump()
+                    assert dict(client.cookies) == before_cookies
+                    assert not verifier.lock.locked()
+                finally:
+                    pending.cancel()
+                    await asyncio.gather(pending, return_exceptions=True)
+                failing = False
+                verifier.failed_until = 0
+                assert (await client.get(f"/api/v1/analyses/{aid}")).status_code == 200
+                client.cookies.set("__session", session_token(signing_key[0], sub="user_OutageOther"))
+                assert (await client.get(f"/api/v1/analyses/{aid}")).status_code == 404
+                client.cookies.clear()
+                assert (await client.get(f"/api/v1/analyses/{aid}", headers={
+                    "authorization": "Bearer " + token, "x-user-id": "user_AuthTestA",
+                })).status_code == 404
+                client.cookies.clear()
+                client.cookies.set("__session", token)
+                assert (await client.get(f"/api/v1/analyses/{aid}")).status_code == 200
+    asyncio.run(scenario())

@@ -14,6 +14,14 @@ bounded async key retrieval, RS256 signatures and an authorized-origin check.
 Client bearer/identity headers are not accepted. Verification failures never
 silently downgrade into guest ownership.
 
+JWKS retrieval has a three-second whole-operation deadline in addition to
+HTTPX's I/O timeouts, so a trickling response cannot keep verification pending.
+One-second lock admission and a two-second failure cooldown also apply to
+already-queued callers. Cancellation propagates and releases only acquired
+admission; cached, still-valid keys remain usable during a refresh failure.
+The managed proxy retains eight slots, one-second admission, a 30-second total
+deadline and a 20 MiB response cap, without replaying credential-bearing requests.
+
 Verified account subjects map to a separate stable owner namespace, allowing
 the same account to retrieve unexpired history from another browser. Anonymous
 cookies cannot select that namespace. Existing session tables support this
