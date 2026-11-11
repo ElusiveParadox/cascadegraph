@@ -1,3 +1,4 @@
 - [Storage availability](storage-availability.md) — stoppable execution, retained capacity, unchanged owners and uncertain-write semantics; keep spawned fault fixtures lightweight.
 - [Desktop accessibility verification](desktop-accessibility.md) — zoom must exercise CSS reflow; DOM focus alone does not establish that keyboard users can see a control.
 - [Runtime environment flags](runtime-environment.md) — REPLIT_ENVIRONMENT is platform context, not a reliable indicator that the app is published.
+- [Folder upload test fixtures](folder-upload-tests.md) — disk-backed uploads need intact original files and browser-side FormData inspection.

@@ -1,5 +1,25 @@
 # Progress
 
+## Repeated source-path conflict resolution — 2026-11-11
+- Source picks and folder discovery stage conflicting batches before changing
+  the selection. Explicit Keep existing, Replace and Cancel choices retain edited
+  paths, unaffected files and manual Analyze submission.
+- Conflict identity uses the trimmed repository-relative path sent to the API.
+  Discovery remains bounded independently; final count and byte limits apply
+  atomically to the resolved selection, allowing replacement at capacity.
+- Five focused unit checks cover single-file decisions, edited paths, nested
+  folder reselection, conflicts between dropped roots and resolved byte limits.
+  Frontend unit suite passed (23 tests plus workspace helper checks).
+- Desktop and phone single-file browser checks passed. The initial nested-folder
+  checks reached submission but Chromium did not expose disk-backed request
+  bodies to Playwright. Test-only FormData capture and independent incoming disk
+  fixtures fixed that limitation; the narrow nested-folder rerun passed on both
+  viewports, including content/path assertions and atomic overflow rejection.
+- Passed workspace type checks, a separate browser-spec TypeScript check,
+  `uv run --frozen ruff check src tests`, and `uv run --frozen pytest` (112 passed).
+  Managed web/API workflows started cleanly; overview screenshot rendered without
+  browser errors. No production publication.
+
 ## Repository folder intake — 2026-11-11
 - Added an optional native directory picker and directory drops alongside the
   unchanged individual-file picker. The selected root name is removed, nested

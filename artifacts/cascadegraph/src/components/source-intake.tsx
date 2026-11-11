@@ -3,10 +3,12 @@ import { FilePlus2, Github, Loader2, X } from "lucide-react";
 import { useAnalyzeRepository, useAnalyzeSources, type Analysis, type SystemStatus } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ErrorPanel, Panel } from "@/components/common";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { SOURCE_ACCEPT, sourceSelectionError } from "@/lib/file-intake";
 import { collectDirectoryEntries, collectFolderFiles, type Discovery, type SourceEntry, type SourceFile } from "@/lib/directory-intake";
+import { resolveSourceConflicts, sourceConflicts, type ConflictChoice } from "@/lib/source-conflicts";
 
 type Props = {
   limits?: SystemStatus;
@@ -28,6 +30,7 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [discovery, setDiscovery] = useState<Discovery | null>(null);
   const [discovering, setDiscovering] = useState(false);
+  const [pendingBatch, setPendingBatch] = useState<{ files: SourceFile[]; conflicts: string[]; discovery: Discovery | null } | null>(null);
   const discoveryLock = useRef(false);
   const repository = useAnalyzeRepository({ mutation: { onSuccess: onAnalyzed } });
   const sources = useAnalyzeSources({ mutation: { onSuccess: onAnalyzed } });
@@ -40,20 +43,34 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
   }
   const fileError = limits ? sourceSelectionError(files.map(f => f.file), limits) : null;
   if (fileError) errors.push(fileError);
-  if (new Set(files.map(f => f.path)).size !== files.length) errors.push("Each uploaded file needs a distinct repository-relative path.");
+  if (new Set(files.map(f => f.path.trim())).size !== files.length) errors.push("Each uploaded file needs a distinct repository-relative path.");
   if (files.some(f => !f.path.trim() || f.path.startsWith("/") || f.path.includes("..") || f.path.includes("\\"))) {
     errors.push("File paths must be relative, without traversal or backslashes.");
   }
-  const intakeDisabled = disabled || busy || discovering || !limits;
+  const intakeDisabled = disabled || busy || discovering || !!pendingBatch || !limits;
   const prefix = project.trim() && project.trim() !== "." ? project.trim().replace(/\/+$/, "") + "/" : "";
+  const commitBatch = (incoming: SourceFile[], choice: ConflictChoice, result: Discovery | null) => {
+    if (choice === "cancel" || !limits) return;
+    const next = resolveSourceConflicts(files, incoming, choice);
+    const error = sourceSelectionError(next.map(source => source.file), limits);
+    setSelectionError(error);
+    if (error) return;
+    setFiles(next);
+    setDiscovery(result);
+  };
+  const stageBatch = (incoming: SourceFile[], result: Discovery | null = null) => {
+    setSelectionError(null); setDiscovery(null);
+    const conflicts = sourceConflicts(files, incoming);
+    if (conflicts.length) setPendingBatch({ files: incoming, conflicts, discovery: result });
+    else commitBatch(incoming, "keep", result);
+  };
   const addFolder = async (read: () => Discovery | Promise<Discovery>) => {
     if (intakeDisabled || discoveryLock.current) return;
     discoveryLock.current = true;
     setDiscovering(true); setSelectionError(null); setDiscovery(null);
     try {
       const result = await read();
-      setFiles(current => [...current, ...result.files.map(source => ({ ...source, path: prefix + source.path }))]);
-      setDiscovery(result);
+      stageBatch(result.files.map(source => ({ ...source, path: prefix + source.path })), result);
     } catch (error) {
       setSelectionError(error instanceof Error ? error.message : "Folder could not be read.");
     } finally {
@@ -61,15 +78,15 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
     }
   };
   const addEntries = (entries: SourceEntry[]) => {
-    if (limits) void addFolder(() => collectDirectoryEntries(entries, limits, files.map(f => f.file)));
+    if (limits) void addFolder(() => collectDirectoryEntries(entries, limits));
   };
   const addFiles = (incoming: File[]) => {
     if (intakeDisabled || !limits || !incoming.length) return;
-    const error = sourceSelectionError([...files.map(f => f.file), ...incoming], limits);
+    const error = sourceSelectionError(incoming, limits);
     setSelectionError(error);
     setDiscovery(null);
     if (error) return;
-    setFiles(current => [...current, ...incoming.map(file => ({ file, path: file.webkitRelativePath || prefix + file.name }))]);
+    stageBatch(incoming.map(file => ({ file, path: file.webkitRelativePath || prefix + file.name })));
   };
   return (
     <Panel title={<span className="flex items-center gap-2"><Github className="h-4 w-4" />Repository URL / source files</span>} meta="public GitHub · read-only">
@@ -108,14 +125,14 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
             <Input type="file" multiple {...{ webkitdirectory: "", directory: "" }} disabled={intakeDisabled}
               className="mt-2 max-w-full" data-testid="input-source-folder" onChange={e => {
                 const selected = e.target.files;
-                if (selected?.length && limits) void addFolder(() => collectFolderFiles(selected, limits, files.map(f => f.file)));
+                if (selected?.length && limits) void addFolder(() => collectFolderFiles(selected, limits));
                 e.target.value = "";
               }} />
           </label>
           <p className="mt-1 text-xs text-muted-foreground">Choose the repository root. Its name is removed; nested paths are kept under the optional project folder above. If folder selection or drops are unavailable in your browser, use individual files or a ZIP. Nothing is sent until you choose Analyze.</p>
           {discovering && <p role="status" className="mt-2 text-xs">Reading folder entries…</p>}
           {discovery && discovery.skippedCount > 0 && <div role="note" className="mt-2 break-words text-xs text-muted-foreground">
-            <p>{discovery.skippedCount} entries skipped. {discovery.files.length} supported files added.</p>
+            <p>{discovery.skippedCount} entries skipped. {discovery.files.length} supported files processed.</p>
             <ul>{discovery.skipped.map((message, i) => <li key={i}>{message}</li>)}</ul>
             {discovery.skippedCount > discovery.skipped.length && <p>Showing the first {discovery.skipped.length} skipped entries.</p>}
           </div>}
@@ -149,6 +166,30 @@ export function SourceIntake({ limits, disabled, onBusyChange, onAnalyzed, initi
         </Button>
         <p className="text-[11px] text-muted-foreground">Supported extraction remains Compose, Python Tenacity/urllib3 and Istio. Unsupported languages or ambiguous topology are reported as incomplete—not invented.</p>
       </form>
+      <AlertDialog open={!!pendingBatch} onOpenChange={open => { if (!open) setPendingBatch(null); }}>
+        <AlertDialogContent className="max-h-[90dvh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Source paths already selected</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingBatch?.conflicts.length} repository-relative paths conflict. Keep existing files and add only new paths, or replace conflicting files with the newly selected versions. Edited paths and other files stay unchanged. Cancel discards the entire new batch. Nothing is sent until you choose Analyze.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ul className="num max-h-40 overflow-y-auto break-all text-xs" aria-label="Conflicting source paths">
+            {pendingBatch?.conflicts.map(path => <li key={path}>{path}</li>)}
+          </ul>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <Button type="button" variant="outline" disabled={disabled || busy || !limits} onClick={() => {
+              if (pendingBatch) commitBatch(pendingBatch.files, "keep", pendingBatch.discovery);
+              setPendingBatch(null);
+            }}>Keep existing</Button>
+            <Button type="button" disabled={disabled || busy || !limits} onClick={() => {
+              if (pendingBatch) commitBatch(pendingBatch.files, "replace", pendingBatch.discovery);
+              setPendingBatch(null);
+            }}>Replace</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Panel>
   );
 }
