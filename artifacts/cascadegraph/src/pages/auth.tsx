@@ -1,10 +1,25 @@
 import type { ReactNode } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
-import { SignIn, SignUp } from "@clerk/react";
+import { HandleSSOCallback, SignIn, SignUp } from "@clerk/react";
 import { useAuthState } from "@/lib/auth-context";
+import { GitHubSignIn } from "@/components/github-sign-in";
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+const embeddedAppearance = {
+  elements: {
+    cardBox: "bg-[#FBFBF9] w-[440px] max-w-full !rounded-none !border-0 !shadow-none",
+  },
+};
+
+function AccountCard({ children }: { children: ReactNode }) {
+  return (
+    <div className="mx-auto w-[440px] max-w-full overflow-hidden rounded-xl border border-[#E4E4E6] bg-[#FBFBF9] shadow-sm">
+      {children}
+      <GitHubSignIn />
+    </div>
+  );
+}
 
 function AuthFrame({ eyebrow, children }: { eyebrow: string; children: ReactNode }) {
   return (
@@ -46,7 +61,7 @@ export function SignInPage() {
   const { available } = useAuthState();
   return (
     <AuthFrame eyebrow="evidence first, conclusions second">
-      {available ? <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} /> : <Unavailable />}
+      {available ? <AccountCard><SignIn appearance={embeddedAppearance} routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} /></AccountCard> : <Unavailable />}
     </AuthFrame>
   );
 }
@@ -55,7 +70,25 @@ export function SignUpPage() {
   const { available } = useAuthState();
   return (
     <AuthFrame eyebrow="keep your analyses with your account">
-      {available ? <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} /> : <Unavailable />}
+      {available ? <AccountCard><SignUp appearance={embeddedAppearance} routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} /></AccountCard> : <Unavailable />}
+    </AuthFrame>
+  );
+}
+
+export function AuthCallbackPage() {
+  const { available } = useAuthState();
+  const [, navigate] = useLocation();
+  return (
+    <AuthFrame eyebrow="Completing your secure sign-in">
+      {available ? <HandleSSOCallback
+        navigateToApp={({ session, decorateUrl }) => {
+          const target = decorateUrl(`${basePath}${session?.currentTask ? "/sign-in" : "/workspace"}`);
+          if (target.startsWith("http")) window.location.assign(target);
+          else navigate(basePath && target.startsWith(basePath) ? target.slice(basePath.length) || "/" : target);
+        }}
+        navigateToSignIn={() => navigate("/sign-in")}
+        navigateToSignUp={() => navigate("/sign-up")}
+      /> : <Unavailable />}
     </AuthFrame>
   );
 }

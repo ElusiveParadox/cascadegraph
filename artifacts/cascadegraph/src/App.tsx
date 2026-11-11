@@ -17,7 +17,7 @@ import ComparisonPage from '@/pages/comparison';
 import ValidationPage from '@/pages/validation';
 import ReportPage from '@/pages/report';
 import HelpPage from '@/pages/help';
-import { SignInPage, SignUpPage } from '@/pages/auth';
+import { AuthCallbackPage, SignInPage, SignUpPage } from '@/pages/auth';
 import { AUTH_UNAVAILABLE, AuthStateProvider, clearBrowserCookie, useAuthState, type AuthState } from '@/lib/auth-context';
 import { writeSelection } from '@/lib/workspace';
 import { Redirect, Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
@@ -142,6 +142,7 @@ function WorkspaceRoutes() {
 function Router() {
   return (
     <Switch>
+      <Route path="/auth/callback" component={AuthCallbackPage} />
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
       <Route component={WorkspaceRoutes} />

@@ -456,4 +456,7 @@ h1,h2,h3{text-wrap:balance}
 .scanbar{animation:scan 1.4s ease-in-out infinite}
 .cl-formFieldInput::placeholder{color:#7a7980;opacity:1}
 .cl-socialButtonsBlockButton:hover{border-color:#96959A}
+/* GitHub uses the explicit, always-visible OAuth entry point below the form. */
+.cl-socialButtonsBlockButton__github,
+.cl-socialButtonsIconButton__github { display: none; }
 .cl-formButtonPrimary:focus-visible,.cl-formFieldInput:focus{outline:2px solid #E6002B;outline-offset:1px}

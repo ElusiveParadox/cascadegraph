@@ -1,5 +1,29 @@
 # Progress
 
+## Explicit GitHub entry point and password review — 2026-11-11
+- Added a visible Continue with GitHub control on both sign-in and sign-up,
+  wired to real Clerk SDK SSO with loading, retry/error feedback and an
+  artifact-relative OAuth callback. Avoided duplicate prebuilt GitHub controls.
+- Browser follow-up confirmed exactly one GitHub control, Google/email
+  availability, keyboard access and mobile fit. The real provider request
+  returned 422 because GitHub is still absent from its enabled strategies;
+  the page now says so clearly and leaves other login methods usable. No
+  successful GitHub consent/login is claimed.
+- Reviewed application schema, credential routes and logging. CascadeGraph
+  stores neither passwords nor password hashes and has no plaintext password
+  comparison. Clerk's published password design describes bcrypt hashing;
+  its internal database was not independently inspected. Production proxy
+  credential bytes are transient, not persisted/logged.
+- A non-secret password canary regression verifies unsupported password/hash
+  inputs are rejected without value echo, logging or analysis creation.
+  Seven auth regressions, 26 frontend helper tests, type checking, Ruff and
+  production frontend build passed.
+- Dependency/privacy scanners reported no findings. Static scanning flagged
+  request-derived proxy paths as potential SSRF. Hardened construction to
+  copy path/query into a fixed HTTPS origin with an explicit host/port allowlist;
+  added adversarial URL regression checks, all passing. The static warning
+  remains reported and reviewed in SECURITY.md, not suppressed.
+
 ## Sidebar authentication — 2026-11-11
 - Added Replit-managed Clerk SignIn/SignUp with the existing Poppins/red theme,
   branded mark, OAuth callback routes and a public guest workbench.

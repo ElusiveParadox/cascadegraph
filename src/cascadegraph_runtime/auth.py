@@ -134,7 +134,12 @@ async def _proxy_bytes(request):
         if len(body) > 10 * 1024 * 1024:
             return Response(status_code=413)
     tail = request.url.path[len(PROXY_PATH):]
-    upstream = FAPI + tail + (f"?{request.url.query}" if request.url.query else "")
+    # Copy path/query components only. Never join an untrusted URL string:
+    # //host, @host, backslashes and encoded slashes cannot replace the origin.
+    upstream = httpx.URL(FAPI).copy_with(path="/" + tail.lstrip("/"),
+                                        query=request.url.query.encode("utf-8"))
+    if upstream.scheme != "https" or upstream.host != "frontend-api.clerk.dev" or upstream.port not in {None, 443}:
+        return Response(status_code=400)
     headers = {k: v for k, v in request.headers.items()
                if k.lower() not in HOP_HEADERS | {"clerk-secret-key", "clerk-proxy-url", "accept-encoding"}}
     headers.update({

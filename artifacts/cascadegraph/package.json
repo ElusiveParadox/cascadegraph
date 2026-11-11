@@ -8,7 +8,7 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx src/lib/workspace.test.ts && tsx --test src/lib/query-client.test.ts src/lib/file-intake.test.ts src/lib/directory-intake.test.ts src/lib/source-conflicts.test.ts",
+    "test": "tsx src/lib/workspace.test.ts && tsx --test src/lib/query-client.test.ts src/lib/file-intake.test.ts src/lib/directory-intake.test.ts src/lib/source-conflicts.test.ts src/lib/github-oauth.test.ts",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

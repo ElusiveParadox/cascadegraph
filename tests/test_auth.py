@@ -173,7 +173,27 @@ def test_proxy_uses_fixed_upstream_and_preserves_cookies(monkeypatch, local_auth
     assert str(seen[0].url) == "https://frontend-api.clerk.dev/v1/environment?test=1"
     assert seen[0].headers["clerk-proxy-url"] == "https://app.example/api/__clerk"
 
+    # Host-like and protocol-relative paths remain paths at the fixed upstream.
+    for path in ("//127.0.0.1/admin", "/https://attacker.example/x", "/@attacker.example/x"):
+        result = local_auth.get("/api/__clerk" + path + "?url=https://attacker.example")
+        assert result.status_code == 200
+        assert seen[-1].url.scheme == "https"
+        assert seen[-1].url.host == "frontend-api.clerk.dev"
+        assert seen[-1].url.port is None
+
 
 def test_account_resolver_rejects_arbitrary_owner(local_auth):
     with pytest.raises(ValueError):
         store.resolve_account("guest-id")
+
+
+def test_application_api_rejects_and_never_echoes_passwords(local_auth, caplog):
+    canary = "test-only-password-canary-not-a-real-credential"
+    for field in ("password", "password_hash", "passwordDigest"):
+        result = local_auth.post("/api/v1/analyses", json={
+            "source_type": "sample", "use_ai": False, field: canary,
+        })
+        assert result.status_code == 422
+        assert canary not in result.text
+    assert canary not in caplog.text
+    assert local_auth.get("/api/v1/analyses").json() == []
