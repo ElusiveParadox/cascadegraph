@@ -16,7 +16,7 @@ provider or GitHub credentials. PostgreSQL retains only minimal redacted evidenc
 | SSRF / credential confusion | Parse only public GitHub root URLs; construct API/codeload URLs ourselves, reject redirects and non-public DNS results, fixed HTTPS hosts, time/byte limits, no ambient proxy or OAuth credentials | Trusted GitHub DNS/TLS and upstream availability; adversarial regression tests required before release |
 | Prompt injection | Source is data, no tools, bounded opt-in context, schema and local AST evidence checks | Source-understanding remains limited; unknown on failure |
 | Secret disclosure | Drop env files, redact evidence/LLM context, never log input or provider errors | Heuristic redaction cannot guarantee detection of all secrets; review uploads |
-| Cross-session access | Server-issued high-entropy HttpOnly SameSite cookie, ownership queries for every record; deletion cascades | No account recovery; cookie possession grants its session |
+| Cross-session access | Verified Clerk session cookies for accounts; high-entropy HttpOnly SameSite cookies for guests; separate owner namespaces; ownership queries for every record; deletion cascades | No guest recovery; guest cookie possession grants its session. No team sharing or roles |
 | CSRF | SameSite strict plus origin/netloc checks on mutations; no permissive CORS | Host/proxy configuration must remain trusted |
 | Exhaustion | 2,000 archive entries, 100 direct uploads, 20 services, 40 edges, 100 policies, 200k simulation events; admission held before body buffering, bounded waiting/body-read time, rate limits and retention | Single-process limits are not distributed quotas; GitHub's unauthenticated public API quota is shared |
 | CI compromise | Trusted branch/sample only, minimal permissions, pinned action SHAs, no production secrets, no Docker socket in app | Base image / dependency supply chain |
@@ -28,9 +28,9 @@ provider or GitHub credentials. PostgreSQL retains only minimal redacted evidenc
 | Duplicate mutation after ambiguous commit | No transparent mutation retries; running-write deadline, lost worker or commit error reports uncertain outcome, no mutation Retry-After | Users must check history and reconcile after recovery; idempotency is not provided |
 
 ## Intended mode
-An anonymous bounded demo, not a private repository collaboration product.
-Add authentication before introducing private-team analyses. PostgreSQL does
-not change the trust model. Never interpret random analysis UUIDs alone as authorization.
+A bounded workbench with optional individual accounts, not a private repository
+collaboration product. Clerk provides individual identity, not team permissions
+or roles. Never interpret random analysis UUIDs alone as authorization.
 
 ## Tests
 Adversarial archive/parser fixtures, session isolation/deletion, provider failure,

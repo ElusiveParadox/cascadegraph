@@ -17,6 +17,7 @@ import {
 import { EmptyState, ErrorPanel, LoadingBlock, PageHeader, Panel, Tag, severityTone } from "@/components/common";
 import { useToast } from "@/hooks/use-toast";
 import { fmtDate, readSelection, writeSelection } from "@/lib/workspace";
+import { useAuthState } from "@/lib/auth-context";
 
 function AiOptIn({ id, checked, onChange, available }: { id: string; checked: boolean; onChange: (v: boolean) => void; available: boolean | undefined }) {
   return (
@@ -37,6 +38,7 @@ function AiOptIn({ id, checked, onChange, available }: { id: string; checked: bo
 }
 
 export default function Overview() {
+  const { signedIn } = useAuthState();
   const qc = useQueryClient();
   const [, nav] = useLocation();
   const parameters = new URLSearchParams(useSearch());
@@ -140,10 +142,13 @@ export default function Overview() {
       </div>
       </div>
 
-      <Panel title="Session history" meta={list.data ? `${list.data.length} analyses` : undefined}>
-        <p className="mb-3 text-xs text-muted-foreground">Analyses belong to this anonymous browser session and expire after a short retention window{status.data ? ` (storage: ${status.data.storage})` : ""}.</p>
+      <Panel title={signedIn ? "Account history" : "Session history"} meta={list.data ? `${list.data.length} analyses` : undefined}>
+        <p className="mb-3 text-xs text-muted-foreground">
+          {signedIn ? "Analyses belong to your signed-in account and can be reopened on another device." : "Guest analyses belong to this browser session and are not automatically transferred when you sign in."}
+          {" "}All analyses expire after 24 hours{status.data ? ` (storage: ${status.data.storage})` : ""}.
+        </p>
         {list.isLoading ? <LoadingBlock rows={3} /> : list.isError ? <ErrorPanel error={list.error} onRetry={() => list.refetch()} /> :
-          !list.data?.length ? <EmptyState title="No analyses in this session">Start with the bundled sample above to see the full workflow.</EmptyState> : (
+          !list.data?.length ? <EmptyState title={signedIn ? "No analyses in this account" : "No analyses in this session"}>Start with the bundled sample above to see the full workflow.</EmptyState> : (
           <div className="overflow-x-auto scroll-p-1" onFocusCapture={(event) => {
             // Browsers can consider a partially clipped table control visible.
             // Reveal the entire focused control, including the final column.

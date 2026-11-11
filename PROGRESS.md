@@ -1,5 +1,27 @@
 # Progress
 
+## Sidebar authentication — 2026-11-11
+- Added Replit-managed Clerk SignIn/SignUp with the existing Poppins/red theme,
+  branded mark, OAuth callback routes and a public guest workbench.
+- Replaced sidebar API/model/AI diagnostics with Sign in or name/email and
+  Sign out. Mobile keyboard focus includes the account button.
+- Added cookie-verified account ownership on the Python API with bounded async
+  signing-key retrieval. Stable account owners are separate from unforgeable
+  guest ownership; no automatic guest transfer or schema changes.
+- Added same-origin cookie cleanup before SDK sign-out, identity-scoped query
+  caches and selection reset. Kept all records' existing 24-hour expiry.
+- Verification: 119 Python tests passed; Ruff, workspace type checks, 23 frontend
+  helper tests and frontend production build passed; dependency audit found no
+  known vulnerabilities. A targeted production-proxy regression also passed
+  after adding admission and total-duration limits.
+- A real programmatic Clerk browser journey verified signed-in footer, sample
+  graph, reload persistence, sign-out/404 isolation, same-account history
+  recovery, deletion and mobile keyboard sign-out. OAuth provider consent and
+  real email delivery were not exercised.
+- Google and email were visible. The user reported enabling GitHub; a fresh
+  sign-in capture still showed no GitHub button, so environment/provider
+  configuration needs confirmation. No fake provider button was added.
+
 ## Repeated source-path conflict resolution — 2026-11-11
 - Source picks and folder discovery stage conflicting batches before changing
   the selection. Explicit Keep existing, Replace and Cancel choices retain edited

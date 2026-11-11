@@ -8,6 +8,12 @@
 import * as zod from 'zod';
 
 
+/**
+ * Expire the anonymous browser cookie before Clerk sign-out. Same-origin only. Does not delete saved analyses or end the Clerk session itself.
+ */
+export const ClearBrowserSessionResponse = zod.void()
+
+
 export const HealthCheckResponse = zod.object({
   "status": zod.string()
 })

@@ -1,4 +1,4 @@
-"""Session-owned SQLite snapshots, short TTL and cascading deletion."""
+"""Guest/account snapshots; explicit SQLite local/test operations and backend selection."""
 
 import json
 import os
@@ -104,6 +104,20 @@ def create_session() -> str:
             raise ValueError("Demo session capacity reached; retry after retention cleanup")
         db.execute("INSERT INTO sessions VALUES (?,?)", (token, datetime.now(UTC).isoformat()))
     return token
+
+
+def resolve_account(owner):
+    if not owner.startswith("acct:") or len(owner) != 63:
+        raise ValueError("Invalid account owner")
+    with database() as db:
+        if not db.execute("SELECT 1 FROM sessions WHERE id=?", (owner,)).fetchone():
+            if db.execute("SELECT count(*) FROM sessions").fetchone()[0] >= 5000:
+                raise ValueError("Session capacity reached")
+        db.execute(
+            "INSERT INTO sessions VALUES (?,?) ON CONFLICT(id) DO UPDATE SET created_at=excluded.created_at",
+            (owner, datetime.now(UTC).isoformat()),
+        )
+    return owner
 
 
 def session_exists(token: str) -> bool:

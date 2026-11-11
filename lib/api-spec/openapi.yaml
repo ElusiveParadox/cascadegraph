@@ -6,6 +6,15 @@ info:
 servers:
   - url: /api
 paths:
+  /v1/auth/sign-out:
+    post:
+      operationId: clearBrowserSession
+      description: Expire the anonymous browser cookie before Clerk sign-out. Same-origin only. Does not delete saved analyses or end the Clerk session itself.
+      responses:
+        "204":
+          description: Browser ownership cookie expired
+        "403":
+          description: Cross-origin mutation rejected
   /healthz:
     get:
       operationId: healthCheck
@@ -52,7 +61,7 @@ paths:
       responses:
         "503": { $ref: "#/components/responses/StorageFailure" }
         "200":
-          description: Analyses owned by this anonymous session
+          description: Analyses owned by this guest browser or verified signed-in account
           content:
             application/json:
               schema:

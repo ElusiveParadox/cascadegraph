@@ -226,3 +226,23 @@ def test_postgres_cancelled_mutations_do_not_run_later(monkeypatch):
             await executor.close()
             cleanup(owner)
     asyncio.run(scenario())
+
+
+def test_postgres_account_owner_is_stable_and_isolated():
+    async def scenario():
+        executor = PostgresExecutor()
+        owner = "acct:" + uuid.uuid4().hex + uuid.uuid4().hex[:26]
+        other = "acct:" + uuid.uuid4().hex + uuid.uuid4().hex[:26]
+        data = snapshot()
+        try:
+            assert await executor.run(store.resolve_account, owner, mutation=True) == owner
+            await executor.run(store.save_analysis, owner, data, mutation=True)
+            assert await executor.run(store.resolve_account, owner, mutation=True) == owner
+            assert await executor.run(store.get_analysis, owner, data["id"]) == data
+            await executor.run(store.resolve_account, other, mutation=True)
+            assert await executor.run(store.get_analysis, other, data["id"]) is None
+            assert await executor.run(store.list_analyses, other) == []
+        finally:
+            await executor.close()
+            cleanup(owner, other)
+    asyncio.run(scenario())

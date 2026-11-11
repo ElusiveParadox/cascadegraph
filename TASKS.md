@@ -1,9 +1,8 @@
 # Active work
 
-Current user-requested work: repair storage initialization, migrate live storage
-to PostgreSQL, preserve existing session data, verify desktop/mobile analysis,
-correction, simulation, export and deletion, and submit all safe current source
-changes to the existing GitHub repository through passing CI.
+Current user-requested work: add Google, GitHub and email sign-in, replace the
+technical sidebar footer with account controls, and verify sign-out and
+account/guest history isolation. Keep the public guest workbench usable.
 
 | ID | Priority | Phase | Work | Depends on | Status | Acceptance |
 |---|---|---|---|---|---|---|

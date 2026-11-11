@@ -27,7 +27,7 @@ export default function HelpPage() {
             <p className="text-sm text-muted-foreground">Off by default. Only when you tick the opt-in checkbox for a specific analysis are source excerpts sent to the external provider, and the call is billed to your credits. The sample analysis never enables it on its own.</p>
           </Panel>
           <Panel title="Data and retention">
-            <p className="text-sm text-muted-foreground">Analyses are tied to an anonymous browser session, survive reloads in that session, and expire after a short retention window. Delete removes the analysis and its simulations immediately.</p>
+            <p className="text-sm text-muted-foreground">Guest analyses belong to this browser session. Signed-in analyses belong to your verified account and can be reopened on another device. Guest work is not automatically moved when you sign in. Analyses survive reloads and expire after 24 hours; delete removes an analysis and its simulations immediately.</p>
           </Panel>
           <Panel title="Server-declared limitations">
             {s.isLoading ? <LoadingBlock rows={2} /> : s.isError ? <ErrorPanel error={s.error} onRetry={() => s.refetch()} /> :

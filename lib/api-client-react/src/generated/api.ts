@@ -69,6 +69,78 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
+export const getClearBrowserSessionUrl = () => {
+
+
+
+
+  return `/api/v1/auth/sign-out`
+}
+
+/**
+ * Expire the anonymous browser cookie before Clerk sign-out. Same-origin only. Does not delete saved analyses or end the Clerk session itself.
+ */
+export const clearBrowserSession = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getClearBrowserSessionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getClearBrowserSessionMutationKey = () => ['clearBrowserSession'] as const;
+
+export const getClearBrowserSessionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearBrowserSession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearBrowserSession>>, TError,void, TContext> => {
+
+const mutationKey = getClearBrowserSessionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearBrowserSession>>, void> = () => {
+
+
+          return  clearBrowserSession(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearBrowserSessionMutationResult = NonNullable<Awaited<ReturnType<typeof clearBrowserSession>>>
+
+    export type ClearBrowserSessionMutationError = ErrorType<void>
+
+
+    /** Expire the anonymous browser cookie before Clerk sign-out. Same-origin only. Does not delete saved analyses or end the Clerk session itself. */
+export const useClearBrowserSession = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearBrowserSession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof clearBrowserSession>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getClearBrowserSessionMutationOptions(options), queryClient);
+    }
+
 export const getHealthCheckUrl = () => {
 
 

@@ -1,9 +1,56 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { BookOpen, FileText, FlaskConical, GitCompare, Home, Network, ShieldCheck, SlidersHorizontal, Menu, X } from "lucide-react";
-import { useGetSystemStatus } from "@workspace/api-client-react";
+import { BookOpen, FileText, FlaskConical, GitCompare, Home, Network, ShieldCheck, SlidersHorizontal, Menu, X, LogIn, LogOut } from "lucide-react";
+import { useAuthState } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
-import { readSelection, type Selection } from "@/lib/workspace";
+import { errorMessage, readSelection, type Selection } from "@/lib/workspace";
+
+function AccountFooter() {
+  const auth = useAuthState();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const onSignOut = async () => {
+    setPending(true);
+    setError(null);
+    try {
+      await auth.signOut();
+    } catch (e) {
+      setError(errorMessage(e));
+      setPending(false);
+    }
+  };
+  return (
+    <div className="mt-auto border-t border-sidebar-border px-3 py-3 text-[12.5px]" data-testid="section-account">
+      {!auth.available ? (
+        <p className="px-2.5 py-1.5 text-sidebar-foreground/60" data-testid="text-auth-unavailable">
+          Sign-in unavailable in this environment. Working as an anonymous browser session.
+        </p>
+      ) : !auth.ready ? (
+        <div className="mx-2.5 my-2 h-4 w-32 animate-pulse rounded bg-sidebar-accent" aria-label="Loading account" />
+      ) : auth.signedIn ? (
+        <>
+          <div className="px-2.5 pb-2 min-w-0">
+            {auth.displayName && <div className="truncate text-sidebar-foreground" data-testid="text-account-name">{auth.displayName}</div>}
+            {auth.email && <div className="truncate font-editorial text-sidebar-foreground/60" data-testid="text-account-email">{auth.email}</div>}
+          </div>
+          <button type="button" onClick={onSignOut} disabled={pending}
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-primary focus-visible:text-sidebar-primary disabled:opacity-60"
+            data-testid="button-sign-out">
+            <LogOut className="h-4 w-4" />{pending ? "Signing out" : "Sign out"}
+          </button>
+          {error && <p role="alert" className="px-2.5 pt-1.5 text-sidebar-primary" data-testid="text-sign-out-error">{error}</p>}
+        </>
+      ) : (
+        <>
+          <p className="px-2.5 pb-1.5 font-editorial text-sidebar-foreground/60">Guest session. Sign in to keep work with your account.</p>
+          <Link href="/sign-in" className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-primary focus-visible:text-sidebar-primary" data-testid="link-sign-in">
+            <LogIn className="h-4 w-4" />Sign in
+          </Link>
+        </>
+      )}
+    </div>
+  );
+}
 
 function useSelection(): Selection {
   const [sel, setSel] = useState<Selection>(readSelection);
@@ -23,14 +70,15 @@ export function Shell({ children }: { children: ReactNode }) {
   const navigationId = useId();
   const compactNavigation = useRef<HTMLDivElement>(null);
   const navigationToggle = useRef<HTMLButtonElement>(null);
-  const status = useGetSystemStatus();
+  const auth = useAuthState();
+  const homeHref = auth.signedIn ? "/workspace" : "/";
   useEffect(() => setOpen(false), [location]);
   useEffect(() => {
     if (!open) return;
     const container = compactNavigation.current!;
     const toggle = navigationToggle.current!;
     const desktop = window.matchMedia("(min-width: 768px)");
-    const links = () => Array.from(container.querySelectorAll<HTMLAnchorElement>("a[href]"));
+    const links = () => Array.from(container.querySelectorAll<HTMLElement>("a[href], button:not([disabled])")).filter((el) => el !== toggle);
     // The close toggle stays in the focus loop alongside the enabled links.
     const focusable = () => [toggle, ...links()];
     const focusFirstLink = () => (links()[0] ?? toggle).focus();
@@ -40,7 +88,7 @@ export function Shell({ children }: { children: ReactNode }) {
         setOpen(false);
       } else if (event.key === "Tab") {
         const targets = focusable();
-        const index = targets.indexOf(document.activeElement as HTMLButtonElement | HTMLAnchorElement);
+        const index = targets.indexOf(document.activeElement as HTMLElement);
         if (index === -1 || (!event.shiftKey && index === targets.length - 1) || (event.shiftKey && index === 0)) {
           event.preventDefault();
           (event.shiftKey ? targets[targets.length - 1] : targets[0]).focus();
@@ -69,7 +117,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const a = sel.analysisId;
   const s = sel.simulationId;
   const items: { href: string | null; label: string; icon: typeof Home; match: string; hint?: string }[] = [
-    { href: "/", label: "Overview", icon: Home, match: "/" },
+    { href: homeHref, label: "Overview", icon: Home, match: "/" },
     { href: a ? `/analyses/${a}` : null, label: "Service graph", icon: Network, match: "/analyses", hint: "select an analysis" },
     { href: a ? `/policies/${a}` : null, label: "Policies", icon: SlidersHorizontal, match: "/policies", hint: "select an analysis" },
     { href: a ? `/simulation/${a}` : null, label: "Simulation", icon: FlaskConical, match: "/simulation", hint: "select an analysis" },
@@ -82,7 +130,7 @@ export function Shell({ children }: { children: ReactNode }) {
     <nav aria-label="Workspace" className="flex flex-col gap-0.5 px-3">
       <div className="px-2.5 pb-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/55">Workflow</div>
       {items.map((it) => {
-        const active = it.match === "/" ? location === "/" : location.startsWith(it.match);
+        const active = it.match === "/" ? location === "/" || location === "/workspace" : location.startsWith(it.match);
         const Icon = it.icon;
         const inner = (
           <>
@@ -110,7 +158,7 @@ export function Shell({ children }: { children: ReactNode }) {
   );
   const side = (
     <div className="flex h-full flex-col overflow-y-auto bg-sidebar text-sidebar-foreground">
-      <Link href="/" className="flex items-center gap-2.5 px-4 py-5" data-testid="link-brand">
+      <Link href={homeHref} className="flex items-center gap-2.5 px-4 py-5" data-testid="link-brand">
         <svg viewBox="0 0 28 28" className="h-7 w-7" aria-hidden>
           <circle cx="5" cy="14" r="3" fill="hsl(var(--sidebar-primary))" />
           <circle cx="23" cy="6" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
@@ -124,11 +172,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </Link>
       {nav}
-      <div className="mt-auto space-y-1 border-t border-sidebar-border px-4 py-3 text-[11px]">
-        <div className="num flex justify-between text-sidebar-foreground/65"><span>api</span><span data-testid="text-api-version">{status.data ? `v${status.data.version}` : status.isError ? "unreachable" : "…"}</span></div>
-        <div className="num flex justify-between text-sidebar-foreground/65"><span>model</span><span>{status.data?.model_version ?? "…"}</span></div>
-        <div className="num flex justify-between text-sidebar-foreground/65"><span>ai</span><span data-testid="text-ai-availability">{status.data ? (status.data.ai_available ? `available · ${status.data.ai_provider}` : "not configured") : "…"}</span></div>
-      </div>
+      <AccountFooter />
     </div>
   );
   return (

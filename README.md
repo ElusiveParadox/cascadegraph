@@ -58,8 +58,13 @@ in the Replit application. AI transmission is opt-in and redacted heuristically,
 not guaranteed secret-free. No arbitrary-host URL ingestion or private multi-user
 mode. Private repositories require an archive or source-file upload.
 
-PostgreSQL stores normalized snapshots with anonymous cookie ownership and 24-hour
+PostgreSQL stores normalized snapshots with guest-cookie or verified account ownership and 24-hour
 retention. An explicit SQLite path is supported only for local/tests. Export important reports. Model output
 is a prediction under explicit assumptions, never a production safety guarantee.
 See [security](SECURITY.md), [threat model](docs/THREAT_MODEL.md), and
 [limitations](docs/KNOWN_LIMITATIONS.md).
+
+Optional Google, GitHub and email accounts use Replit-managed Clerk. See
+[authentication setup and ownership](docs/AUTHENTICATION.md). The sidebar has
+Sign in for guests and Sign out for accounts; guest records are not
+automatically transferred into an account.

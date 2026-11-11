@@ -10,10 +10,13 @@ AI extraction is opt-in. Only the bounded supported function is transmitted afte
 heuristic redaction. Do not upload secrets; redaction is not a guarantee. Provider
 keys remain server-side. AI failure leaves unresolved evidence.
 
-Analyses belong to anonymous HttpOnly-cookie sessions, expire after 24 hours and
+Analyses belong to anonymous HttpOnly-cookie sessions or verified Clerk accounts,
+expire after 24 hours and
 can be deleted. PostgreSQL persists snapshots; explicit local/test SQLite files
-may reset. Export important reports. No private authenticated multi-user mode is
-offered. See docs/THREAT_MODEL.md for trust boundaries and residual risks.
+may reset. Export important reports. Verified Clerk accounts have separate
+history; guest cookies cannot claim account owners. This does not provide
+private-team collaboration or role-based sharing. See docs/AUTHENTICATION.md
+and docs/THREAT_MODEL.md for trust boundaries and residual risks.
 
 Do not post credentials or private source in public issues. Report reproducible
 vulnerabilities privately to the repository owner using GitHub private reporting

@@ -18,6 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from . import store
 from .ai import ai_available
 from .analysis import analyze, refresh_policy_findings, utcnow
+from .auth import PROXY_PATH, AuthVerifier, clerk_proxy
 from .models import (
     MODEL_VERSION,
     Analysis,
@@ -53,7 +54,7 @@ LIMITATIONS = [
     "Supports bounded Python Tenacity/urllib3, Istio VirtualService and Compose syntax only.",
     "Custom-loop AI support is restricted to the bundled range-loop pattern and requires explicit opt-in.",
     "Public GitHub root URLs only; no arbitrary hosts, redirect following or private GitHub credentials. Private source must be uploaded.",
-    "Analyses expire after 24 hours and belong to this anonymous browser session; export important reports.",
+    "Analyses expire after 24 hours and belong to the guest browser or signed-in account; export important reports.",
     "The simulator supports acyclic call paths and sequential fan-out, not arbitrary production behavior.",
     "Measured validation describes only the committed sample and matching CI scenarios, never an uploaded application.",
 ]
@@ -89,6 +90,9 @@ class SafetyMiddleware(BaseHTTPMiddleware):
         return response
 
     async def handle(self, request, call_next):
+        if request.url.path == PROXY_PATH or request.url.path.startswith(PROXY_PATH + "/"):
+            # Clerk owns authentication, CSRF and its raw request/response bytes.
+            return await call_next(request)
         if request.url.path in {"/api/healthz", "/api/v1/health/live", "/api/v1/health/ready"}:
             # Operational health is independent of client rate/session state.
             return await call_next(request)
@@ -96,6 +100,9 @@ class SafetyMiddleware(BaseHTTPMiddleware):
         origin = request.headers.get("origin")
         if mutating and origin and urlparse(origin).netloc != request.headers.get("host"):
             return JSONResponse({"error": "Cross-origin mutation rejected", "code": "ORIGIN_REJECTED"}, 403)
+        if request.url.path == "/api/v1/auth/sign-out":
+            # Browser cleanup must work even during a storage/auth outage.
+            return await call_next(request)
         try:
             length = int(request.headers.get("content-length", "0"))
         except ValueError:
@@ -117,10 +124,15 @@ class SafetyMiddleware(BaseHTTPMiddleware):
         }:
             return await call_next(request)
         token = request.cookies.get("cg_session", "")
-        if len(token) > 64:
+        if len(token) > 64 or token.startswith("acct:"):
             token = ""
         try:
-            token, new = await request.app.state.storage.run(store.resolve_session, token, mutation=True)
+            account = await request.app.state.auth.owner(request)
+            if account:
+                token = await request.app.state.storage.run(store.resolve_account, account, mutation=True)
+                new = False
+            else:
+                token, new = await request.app.state.storage.run(store.resolve_session, token, mutation=True)
         except ValueError:
             return JSONResponse({"error": "Demo session capacity reached"}, 429)
         request.state.owner = token
@@ -180,6 +192,7 @@ async def lifespan(application):
         else:
             storage = StorageExecutor()
         application.state.storage = storage
+        application.state.auth = AuthVerifier()
         try:
             await storage.run(store.initialize, mutation=True)
         except StorageUnavailable:
@@ -191,7 +204,10 @@ async def lifespan(application):
     finally:
         storage.users -= 1
         if storage.users == 0:
-            await storage.close()
+            try:
+                await storage.close()
+            finally:
+                await application.state.auth.close()
 
 
 def storage_error(request, exc):
@@ -209,6 +225,19 @@ def storage_error(request, exc):
 app = FastAPI(title="CascadeGraph", version="1.0.0", docs_url="/api/docs", lifespan=lifespan,
               openapi_url="/api/openapi.json", redoc_url=None)
 app.add_middleware(SafetyMiddleware)
+
+
+app.add_api_route(PROXY_PATH, clerk_proxy, methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+                  include_in_schema=False)
+app.add_api_route(PROXY_PATH + "/{path:path}", clerk_proxy,
+                  methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"], include_in_schema=False)
+
+
+@app.post("/api/v1/auth/sign-out", status_code=204, operation_id="clearBrowserSession")
+async def clear_browser_session():
+    response = Response(status_code=204)
+    response.delete_cookie("cg_session", path="/api")
+    return response
 
 
 @app.exception_handler(StorageUnavailable)

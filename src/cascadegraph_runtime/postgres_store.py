@@ -40,6 +40,24 @@ async def create_session(db):
     return token
 
 
+async def resolve_account(db, owner):
+    if not owner.startswith("acct:") or len(owner) != 63:
+        raise ValueError("Invalid account owner")
+    row = await (await db.execute("SELECT id FROM cg_sessions WHERE id=%s", (owner,))).fetchone()
+    if not row:
+        await db.execute("SELECT pg_advisory_xact_lock(7070001)")
+        await prune(db)
+        count = await (await db.execute("SELECT count(*) FROM cg_sessions")).fetchone()
+        if count[0] >= 5000:
+            raise ValueError("Session capacity reached")
+    await db.execute(
+        """INSERT INTO cg_sessions (id) VALUES (%s) ON CONFLICT(id)
+        DO UPDATE SET created_at=CURRENT_TIMESTAMP
+        WHERE cg_sessions.created_at < CURRENT_TIMESTAMP - INTERVAL '1 hour'""", (owner,),
+    )
+    return owner
+
+
 async def session_exists(db, token):
     return bool(await (await db.execute(
         "SELECT 1 FROM cg_sessions WHERE id=%s AND created_at > CURRENT_TIMESTAMP - INTERVAL '25 hours'",

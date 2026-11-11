@@ -3,9 +3,10 @@
 The live Python API uses the runtime-managed `DATABASE_URL`. It stores only
 normalized/redacted snapshots in `cg_sessions`, `cg_analyses`, and
 `cg_simulations`. The dormant TypeScript database package is not used.
-Anonymous ownership and 24-hour analysis retention are unchanged. PostgreSQL
-does not add user accounts, account recovery, private-team access, or distributed
-rate limiting.
+Guest ownership and 24-hour analysis retention are unchanged. Optional Clerk
+accounts use a separate stable owner namespace in the same session tables; see
+AUTHENTICATION.md. PostgreSQL itself does not add identity, private-team sharing
+or distributed rate limiting.
 
 ## Development
 

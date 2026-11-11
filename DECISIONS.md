@@ -1,5 +1,31 @@
 # Engineering decisions
 
+## ADR-012 — Managed accounts and separate guest ownership
+
+The user requested Google, GitHub and email sign-in and a sidebar Sign out
+control. Replit-managed Clerk handles credentials, recovery, social OAuth and
+cookie sessions; provider enablement belongs to the Auth pane.
+The existing Python API remains the active server. Its production Frontend API
+proxy implements the canonical managed Clerk proxy headers and byte-preserving,
+length-delimited responses rather than introducing a second Express server.
+
+The API validates session cookies against app-specific verification keys using
+bounded async key retrieval, RS256 signatures and an authorized-origin check.
+Client bearer/identity headers are not accepted. Verification failures never
+silently downgrade into guest ownership.
+
+Verified account subjects map to a separate stable owner namespace, allowing
+the same account to retrieve unexpired history from another browser. Anonymous
+cookies cannot select that namespace. Existing session tables support this
+without schema changes. All analysis/simulation/report lookups still check
+ownership, with the existing 24-hour expiry. This is not team sharing or RBAC.
+
+Guest work stays public and separate; signing in never implicitly claims or
+transfers guest records. The auth screen tells users to export guest reports.
+Sign-out clears the guest cookie, ends Clerk's session, resets selection and
+uses identity-scoped query caches. It never deletes saved records.
+Development and production Clerk users remain separate.
+
 ## ADR-011 — PostgreSQL live storage (2026-11-10)
 Accepted at the user's explicit request. The current two-process SQLite executor
 rejects concurrent browser reads and spawns a new interpreter for every operation.

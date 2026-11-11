@@ -1,5 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@layer theme, base, clerk, components, utilities;
 @import 'tailwindcss';
+@import '@clerk/themes/shadcn.css';
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
 
@@ -452,3 +454,6 @@ h1,h2,h3{text-wrap:balance}
 .edge-flow{stroke-dasharray:5 5;animation:dash 1.2s linear infinite}
 @keyframes scan{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
 .scanbar{animation:scan 1.4s ease-in-out infinite}
+.cl-formFieldInput::placeholder{color:#7a7980;opacity:1}
+.cl-socialButtonsBlockButton:hover{border-color:#96959A}
+.cl-formButtonPrimary:focus-visible,.cl-formFieldInput:focus{outline:2px solid #E6002B;outline-offset:1px}
